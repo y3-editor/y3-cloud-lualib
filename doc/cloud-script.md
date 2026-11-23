@@ -337,7 +337,7 @@ local raw, err = MsBase64Decode(b64)     -- 成功 string；失败 nil, "invalid
 | 解码严格度 | **只接受规范填充**：缺填充（`YQ`）、半填充（`YQ=`）、带空格/换行、多余填充（`aGVsbG8==`）、URL-safe（`-`/`_`）、非法字符一律返回 `nil, "invalid base64 input"`，不抛错 |
 | 二进制 | 0x00–0xFF 全字节、NUL、0xFF 均能精确往返 |
 | 规模 | 1 MB 原文（编码 1,398,104 字节）往返正确，无内建长度限制迹象 |
-| 互通 | 与纯 Lua 实现（`util/base64.lua`）双向结果一致 |
+| 封装 | 云脚本侧统一用 `y3.base64`（`y3/util/base64.lua`，内部就是 `MsBase64*`） |
 
 用法约束：解码结果是 `nil` 必须当失败处理（不可能用返回值判断真假）；带空白/换行的外部 base64 要先自行剔除空白再交给 `MsBase64Decode`。
 
@@ -662,3 +662,37 @@ end
 - 需要整段下发的内容按 base64 分片（每片附序号），客户端解码后再 `load` 组装，注意单条消息 10,240 字节上限
 - 热更内容用单个 Redis key 存整段 JSON，只留最新一份 + 毫秒时间戳版本号，与随包发布的 `build_time` 比较判断是否过期
 - 只在 `_roomloaded` 读一次（不轮询），下一局生效
+
+## 附 C. 通讯层（y3.cloud / y3.client）
+
+两端各一个薄封装，共用传输事件 `$Y3Cloud`：
+
+| 端 | 模块 | 全局 |
+|---|---|---|
+| 客户端 | `global_script/y3/game/cloud.lua` | `y3.cloud` |
+| 云脚本 | `cloud_script/y3/game/client.lua` | `y3.client` |
+
+```lua
+-- 客户端
+y3.cloud.request(method, data, callback)   -- callback(suc, data, err)，返回请求 id
+y3.cloud.awaitRequest(method, data)        -- 必须在协程内，返回 suc, data, err
+y3.cloud.notify(method, data)
+y3.cloud.register(method, callback)        -- callback(data, player) 的返回值作为应答；player 由业务自行判断
+
+-- 云脚本
+y3.client.request(player, method, data, callback)
+y3.client.awaitRequest(player, method, data)
+y3.client.notify(player, method, data)
+y3.client.broadcast(method, data)
+y3.client.register(method, callback)       -- callback(role_id, data) 的返回值作为应答
+```
+
+报文：`{ i = 请求 id, m = method, d = base64(y3.seri) 业务数据, e = 错误文本 }`
+
+- **类型由字段组合判定**，不额外传 kind：有 `i` 有 `m` = 请求；有 `i` 无 `m` = 应答；无 `i` 有 `m` = 通知
+- **业务数据走 `y3.seri` 序列化后再 base64**：下行 `mlscript_event_data` 是 `py.Table`，嵌套表不会自动转 Lua 表；seri 二进制还可能含 `\0` 和非法 UTF-8 字节（上行会被静默丢弃、下行会打断通道），必须 base64
+- **成败只看 `e` 是否为 nil**：跨端布尔要过 py 对象，不作为状态字段
+- **目标玩家透传给业务**：下行事件自带目标玩家 `player`（即 `MsSendMlEvent` 的 `role_id`），通讯层不过滤、原样交给 handler，由业务自己判断；报文里不传目标 id
+- `broadcast` 按云脚本已识别的玩家集合逐个发送（`_roomloaded` 的 `player_guids`、`_playerjoin`、任何入站消息）
+- 请求超时默认 5 秒（`M.timeout`，单位秒）；超时以 `suc=false, err='timeout'` 回调
+- 云脚本侧 `awaitRequest` 依赖 `coroutine.isyieldable()`，在普通事件回调里调用会直接报错
