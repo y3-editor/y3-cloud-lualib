@@ -1,7 +1,6 @@
--- 云脚本基础框架入口（骨架）。
+-- 云脚本基础框架入口。
 -- 用法：require 'y3' 拿到 y3 表；基础模块放 y3/<模块>.lua，用 y3.require('rpc') 按需加载。
--- 注意：云脚本环境没有 include、没有 Class、没有项目自定义全局，模块一律走 require。
--- 本文件不注册任何事件，业务入口与事件注册留在 cloud_script/main.lua 与 cloud_script/game/。
+-- 云脚本环境只有 require 加载链，没有 include / Class / 项目自定义全局。
 
 local y3 = {
     version = '0.1.0',
