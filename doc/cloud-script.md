@@ -669,22 +669,22 @@ end
 
 | 端 | 模块 | 全局 |
 |---|---|---|
-| 客户端 | `global_script/y3/game/cloud.lua` | `y3.cloud` |
-| 云脚本 | `cloud_script/y3/game/client.lua` | `y3.client` |
+| 客户端 | `global_script/y3/cloud/`（入口 `init.lua`） | `y3.cloud` |
+| 云脚本 | `cloud_script/y3/client/`（入口 `init.lua`） | `y3.client` |
 
 ```lua
--- 客户端
-y3.cloud.request(method, data, callback)   -- callback(suc, data, err)，返回请求 id
-y3.cloud.awaitRequest(method, data)        -- 必须在协程内，返回 suc, data, err
-y3.cloud.notify(method, data)
-y3.cloud.register(method, callback)        -- callback(data, player) 的返回值作为应答；player 由业务自行判断
+-- 客户端：y3.cloud 是命名空间，请求 / 应答 / 通知在 y3.cloud.rpc
+y3.cloud.rpc.request(method, data, callback)   -- callback(suc, data, err)，返回请求 id
+y3.cloud.rpc.awaitRequest(method, data)        -- 必须在协程内，返回 suc, data, err
+y3.cloud.rpc.notify(method, data)
+y3.cloud.rpc.register(method, callback)        -- callback(data, player) 的返回值作为应答；player 由业务自行判断
 
--- 云脚本
-y3.client.request(player, method, data, callback)
-y3.client.awaitRequest(player, method, data)
-y3.client.notify(player, method, data)
-y3.client.broadcast(method, data)
-y3.client.register(method, callback)       -- callback(role_id, data) 的返回值作为应答
+-- 云脚本：y3.client 同样是命名空间，请求 / 应答 / 通知 / 广播在 y3.client.rpc
+y3.client.rpc.request(player, method, data, callback)
+y3.client.rpc.awaitRequest(player, method, data)
+y3.client.rpc.notify(player, method, data)
+y3.client.rpc.broadcast(method, data)
+y3.client.rpc.register(method, callback)   -- callback(role_id, data) 的返回值作为应答
 ```
 
 报文：`{ i = 请求 id, m = method, d = base64(y3.seri) 业务数据, e = 错误文本 }`

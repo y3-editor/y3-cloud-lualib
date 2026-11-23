@@ -19,9 +19,16 @@ Alias        = y3.class.alias
 IsInstanceOf = y3.class.isInstanceOf
 
 y3.seri   = require 'y3.tools.serialization'
+y3.await  = require 'y3.tools.await'
 y3.base64 = require 'y3.util.base64'
 y3.json   = require 'y3.util.json'
 y3.redis  = require 'y3.util.redis'
 y3.timer  = require 'y3.util.timer'
+
+y3.await.setSleepWaker(function (time, callback)
+    y3.timer.wait(time, callback)
+end)
+
+y3.client = require 'y3.client.init'
 
 return y3

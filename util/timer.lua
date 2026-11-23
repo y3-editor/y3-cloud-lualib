@@ -1,38 +1,52 @@
--- 云脚本定时器：封装内置 Timer，语义对齐客户端 y3.ltimer
--- 时间单位统一为秒（内部换算成整数毫秒，最小 1 ms）；回调收到 (timer, 次数)
+-- 云脚本定时器：参考客户端 y3.ltimer 自实现调度
+-- 引擎 Timer 的回调会绑在「创建它的协程」上，业务里在协程内建 Timer 会互相干扰，
+-- 所以这里只在入口加载时（主线程）建一个脉冲定时器，用它推进所有业务定时器。
+-- 时间单位对外是秒，内部按脉冲累加毫秒。
+
+local TICK_MS = 10
 
 ---@class CloudTimer
----@field id integer 引擎定时器 id
----@field time number 间隔秒数
+---@field time_ms integer 间隔毫秒
 ---@field count integer 已触发次数
 ---@field max_count integer 触发上限，0 为无限
 ---@field removed boolean 是否已取消
+---@field last_ms integer 上次触发时刻
 ---@field on_timer fun(timer: CloudTimer, count: integer)
 local CloudTimer = Class 'CloudTimer'
+
+---@type CloudTimer[]
+local timers = {}
+
+local now_ms = 0
 
 ---@param time number 秒
 ---@param count integer 触发次数，0 表示无限
 ---@param on_timer fun(timer: CloudTimer, count: integer)
 function CloudTimer:__init(time, count, on_timer)
-    self.time = time
+    self.time_ms = math.max(1, math.floor(time * 1000 + 0.5))
     self.max_count = count
     self.count = 0
     self.removed = false
+    self.last_ms = now_ms
     self.on_timer = on_timer
 
-    local interval = math.max(1, math.floor(time * 1000 + 0.5))
-    self.id = Timer.new_timer(interval, function ()
-        return self:run()
-    end)
+    timers[#timers + 1] = self
 end
 
----@return boolean 是否继续触发
-function CloudTimer:run()
+---@param current_ms integer
+---@return boolean 是否继续保留
+function CloudTimer:update(current_ms)
     if self.removed then
         return false
     end
 
+    if current_ms - self.last_ms < self.time_ms then
+        return true
+    end
+
+    self.last_ms = current_ms
     self.count = self.count + 1
+
     local ok, err = pcall(self.on_timer, self, self.count)
     if not ok then
         Log.error('y3.timer: callback error, ' .. tostring(err))
@@ -54,11 +68,39 @@ function CloudTimer:remove()
         return
     end
     self.removed = true
-    Timer.cancel_timer(self.id)
+
+    for i = #timers, 1, -1 do
+        if timers[i] == self then
+            table.remove(timers, i)
+            break
+        end
+    end
 end
+
+local function tick()
+    now_ms = now_ms + TICK_MS
+
+    local snapshot = {}
+    for i = 1, #timers do
+        snapshot[i] = timers[i]
+    end
+
+    for i = 1, #snapshot do
+        snapshot[i]:update(now_ms)
+    end
+    return true
+end
+
+Timer.new_timer(TICK_MS, tick)
 
 ---@class CloudTimers
 local M = {}
+
+---当前调度时刻（毫秒）
+---@return integer
+function M.clock()
+    return now_ms
+end
 
 ---等待 time 秒后触发一次
 ---@param time number 秒

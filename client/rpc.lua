@@ -1,3 +1,4 @@
+-- 请求 / 应答 / 通知 / 广播：y3.client.rpc
 -- 报文（d = base64(y3.seri)）：
 --   请求 { i: integer, m: string, d: string? }
 --   应答 { i: integer, d: string?, e: string? }
@@ -5,7 +6,7 @@
 
 local json = y3.json
 
----@class Client
+---@class ClientRpc
 local M = {
     EVENT = '$Y3Cloud',
     timeout = 5,
@@ -24,6 +25,7 @@ local handlers = {}
 ---@type table<integer, true>
 local players = {}
 
+---@return integer
 local function next_id()
     seq = seq + 1
     if seq > 0x7FFFFFFF then
@@ -46,14 +48,14 @@ end
 
 ---@param data any
 ---@return string?
-local function encode_data(data)
+local function pack(data)
     if data == nil then
         return nil
     end
 
     local ok, text = pcall(y3.seri.encode, data)
     if not ok then
-        Log.warn('y3.client: encode failed, ' .. tostring(text))
+        Log.warn('y3.client.rpc: encode failed, ' .. tostring(text))
         return nil
     end
 
@@ -62,20 +64,20 @@ end
 
 ---@param raw any
 ---@return any
-local function decode_data(raw)
+local function unpack_data(raw)
     if type(raw) ~= 'string' then
         return raw
     end
 
     local text = y3.base64.decode(raw)
     if text == nil then
-        Log.warn('y3.client: base64 decode failed')
+        Log.warn('y3.client.rpc: base64 decode failed')
         return nil
     end
 
     local ok, value = pcall(y3.seri.decode, text)
     if not ok then
-        Log.warn('y3.client: decode failed, ' .. tostring(value))
+        Log.warn('y3.client.rpc: decode failed, ' .. tostring(value))
         return nil
     end
     return value
@@ -86,7 +88,7 @@ end
 ---@return boolean
 local function send(role_id, payload)
     if payload.d ~= nil then
-        payload.d = encode_data(payload.d)
+        payload.d = pack(payload.d)
         if payload.d == nil then
             return false
         end
@@ -94,13 +96,13 @@ local function send(role_id, payload)
 
     local ok, text = pcall(json.encode, payload)
     if not ok then
-        Log.warn('y3.client: encode failed, method=' .. tostring(payload.m) .. ', ' .. tostring(text))
+        Log.warn('y3.client.rpc: encode failed, method=' .. tostring(payload.m) .. ', ' .. tostring(text))
         return false
     end
 
     local code = MsSendMlEvent(role_id, M.EVENT, text)
     if code ~= 0 then
-        Log.warn('y3.client: send failed, code=' .. tostring(code) .. ', method=' .. tostring(payload.m))
+        Log.warn('y3.client.rpc: send failed, code=' .. tostring(code) .. ', method=' .. tostring(payload.m))
         return false
     end
     return true
@@ -131,13 +133,13 @@ end
 local function dispatch(role_id, method, data)
     local handler = handlers[method]
     if not handler then
-        Log.warn('y3.client: no handler, method=' .. tostring(method))
+        Log.warn('y3.client.rpc: no handler, method=' .. tostring(method))
         return nil, 'no_handler'
     end
 
     local ok, result, err = pcall(handler, role_id, data)
     if not ok then
-        Log.warn('y3.client: handler error, method=' .. tostring(method) .. ', ' .. tostring(result))
+        Log.warn('y3.client.rpc: handler error, method=' .. tostring(method) .. ', ' .. tostring(result))
         return nil, tostring(result)
     end
     return result, err
@@ -148,13 +150,14 @@ end
 local function on_payload(role_id, payload)
     local id = payload.i
     local method = payload.m
+    local body = unpack_data(payload.d)
     if id ~= nil and method ~= nil then        -- 请求
-        local result, err = dispatch(role_id, method, decode_data(payload.d))
+        local result, err = dispatch(role_id, method, body)
         send(role_id, { i = id, d = result, e = err })
     elseif id ~= nil then                      -- 应答
-        settle(id, payload.e, decode_data(payload.d))
+        settle(id, payload.e, body)
     elseif method ~= nil then                  -- 通知
-        dispatch(role_id, method, decode_data(payload.d))
+        dispatch(role_id, method, body)
     end
 end
 
@@ -165,7 +168,7 @@ local function on_message(role_id, evalue)
 
     local ok, payload = pcall(json.decode, evalue)
     if not ok or type(payload) ~= 'table' then
-        Log.warn('y3.client: invalid payload, role=' .. tostring(role_id))
+        Log.warn('y3.client.rpc: invalid payload, role=' .. tostring(role_id))
         return
     end
 
@@ -184,7 +187,7 @@ RegisterEvent('_roomloaded', function (_, _, _, player_guids)
         end
     end)
     if not ok then
-        Log.warn('y3.client: player_guids invalid, ' .. tostring(err))
+        Log.warn('y3.client.rpc: player_guids invalid, ' .. tostring(err))
     end
 end)
 
@@ -212,13 +215,14 @@ end
 function M.request(player, method, data, callback)
     local role_id = to_role_id(player)
     if role_id == nil then
-        Log.warn('y3.client: invalid player, method=' .. tostring(method))
+        Log.warn('y3.client.rpc: invalid player, method=' .. tostring(method))
         return 0
     end
 
     local id = next_id()
-    pending[id] = { callback = callback }
-    pending[id].timer_id = Timer.new_timer(M.timeout * 1000, function ()
+    local entry = { callback = callback }
+    pending[id] = entry
+    entry.timer_id = Timer.new_timer(M.timeout * 1000, function ()
         settle(id, 'timeout')
         return false
     end)
@@ -237,7 +241,7 @@ end
 function M.notify(player, method, data)
     local role_id = to_role_id(player)
     if role_id == nil then
-        Log.warn('y3.client: invalid player, method=' .. tostring(method))
+        Log.warn('y3.client.rpc: invalid player, method=' .. tostring(method))
         return false
     end
     return send(role_id, { m = method, d = data })
@@ -266,28 +270,9 @@ end
 ---@return any data
 ---@return string? err
 function M.awaitRequest(player, method, data)
-    if not coroutine.isyieldable() then
-        error('y3.client.awaitRequest must be called inside a coroutine', 2)
-    end
-
-    local co = coroutine.running()
-    local done = false
-    local suc, result, err
-
-    M.request(player, method, data, function (s, d, e)
-        done = true
-        suc, result, err = s, d, e
-        if coroutine.status(co) == 'suspended' then
-            coroutine.resume(co)
-        end
+    return y3.await.yield(function (resume)
+        M.request(player, method, data, resume)
     end)
-
-    if not done then
-        coroutine.yield()
-    end
-    return suc, result, err
 end
-
-y3.client = M
 
 return M
