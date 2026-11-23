@@ -3,7 +3,7 @@
 --   应答 { i: integer, d: string?, e: string? }
 --   通知 { m: string, d: string? }
 
-local json = require 'cjson'
+local json = y3.json
 
 ---@class Client
 local M = {

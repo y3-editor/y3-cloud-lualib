@@ -2,11 +2,26 @@
 -- 用法：require 'y3' 拿到全局 y3 表；模块放 y3/<目录>/<模块>.lua，按 require 'y3.<目录>.<模块>' 加载。
 -- util/ 放依赖引擎接口的工具，tools/ 放纯 Lua 工具。
 
-y3 = y3 or {}
+---@class Y3
+y3 = {}
 
 y3.version = '0.1.0'
 
+y3.class = require 'y3.tools.class'
+
+Class        = y3.class.declare
+New          = y3.class.new
+Extends      = y3.class.extends
+Delete       = y3.class.delete
+IsValid      = y3.class.isValid
+Type         = y3.class.type
+Alias        = y3.class.alias
+IsInstanceOf = y3.class.isInstanceOf
+
 y3.seri   = require 'y3.tools.serialization'
 y3.base64 = require 'y3.util.base64'
+y3.json   = require 'y3.util.json'
+y3.redis  = require 'y3.util.redis'
+y3.timer  = require 'y3.util.timer'
 
 return y3
