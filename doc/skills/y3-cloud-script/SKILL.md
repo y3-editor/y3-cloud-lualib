@@ -68,7 +68,8 @@ y3.client.rpc.notify(player, method, data)
 y3.client.rpc.broadcast(method, data)              -- 一次发送，平台广播给全房间
 ```
 
-- 传输事件 `$Y3Cloud`，报文 `{ i, m, d, e }`：`i+m` 请求、`i` 应答、`m` 通知；`d` 是 `base64(y3.seri)` 业务数据
+- 传输事件 `$Y3Cloud`：报文整包 `base64(y3.seri)`，解出后是 `{ i, m, d, e }`（`i+m` 请求、`i` 应答、`m` 通知）；调用方直接把 `data` 交给库，不用自己序列化
+- 外壳（实测）：引擎两个方向都自作主张 `json` 一次 —— **下行**（`MsSendMlEvent`）必须发 JSON 字符串字面量 `"base64"`，客户端拿到的是去引号的字符串；**上行**（`send_mlscript_msg`，meta 声明 `py.Table`，实测传 string 也通）直接发 base64 字符串，云端 `evalue` 会带首尾引号，需 `sub(2, -2)` 脱引号。base64 字符集不含引号与转义，套引号安全
 - 成败只看 `e` 是否为 nil；超时默认 5 秒（`y3.client.rpc.timeout`）
 - 单条消息上限 10240 字节：超限不发送并打 warn，请求回包超限会回 `e = 'payload_too_large'`
 - handler 返回值即应答体；抛错会转成 `e`

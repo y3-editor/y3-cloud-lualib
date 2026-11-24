@@ -1,10 +1,5 @@
 -- 请求 / 应答 / 通知 / 广播：y3.client.rpc
--- 报文（d = base64(y3.seri)）：
---   请求 { i: integer, m: string, d: string? }
---   应答 { i: integer, d: string?, e: string? }
---   通知 { m: string, d: string? }
-
-local json = y3.json
+-- 报文 = base64(y3.seri)；上行收引擎带引号的字符串（脱引号），下行发 JSON 字符串字面量
 
 ---@class Client.Rpc
 local M = {
@@ -56,41 +51,32 @@ local function to_role_id(player)
     return nil
 end
 
----@param data any
+---@param payload table
 ---@return string?
-local function pack(data)
-    if data == nil then
-        return nil
-    end
-
-    local ok, text = pcall(y3.seri.encode, data)
+local function pack_payload(payload)
+    local ok, text = pcall(y3.seri.encode, payload)
     if not ok then
         Log.warn('y3.client.rpc: encode failed, ' .. tostring(text))
         return nil
     end
-
     return y3.base64.encode(text)
 end
 
----@param raw any
----@return any
-local function unpack_data(raw)
-    if type(raw) ~= 'string' then
-        return raw
-    end
-
+---@param raw string
+---@return table?
+local function unpack_payload(raw)
     local text = y3.base64.decode(raw)
     if text == nil then
         Log.warn('y3.client.rpc: base64 decode failed')
         return nil
     end
 
-    local ok, value = pcall(y3.seri.decode, text)
-    if not ok then
-        Log.warn('y3.client.rpc: decode failed, ' .. tostring(value))
+    local ok, payload = pcall(y3.seri.decode, text)
+    if not ok or type(payload) ~= 'table' then
+        Log.warn('y3.client.rpc: decode failed, ' .. tostring(payload))
         return nil
     end
-    return value
+    return payload
 end
 
 ---@param role_id integer
@@ -98,24 +84,19 @@ end
 ---@return boolean ok
 ---@return string? err
 local function send(role_id, payload)
-    if payload.d ~= nil then
-        payload.d = pack(payload.d)
-        if payload.d == nil then
-            return false, 'encode_failed'
-        end
-    end
-
-    local ok, text = pcall(json.encode, payload)
-    if not ok then
-        Log.warn('y3.client.rpc: encode failed, method=' .. tostring(payload.m) .. ', ' .. tostring(text))
+    local text = pack_payload(payload)
+    if text == nil then
         return false, 'encode_failed'
     end
-    if #text > MAX_MESSAGE_BYTES then
-        Log.warn('y3.client.rpc: payload too large, method=' .. tostring(payload.m) .. ', bytes=' .. #text)
+
+    -- 下行发 JSON 字符串字面量，客户端事件数据会被解成去掉引号的字符串
+    local body = '"' .. text .. '"'
+    if #body > MAX_MESSAGE_BYTES then
+        Log.warn('y3.client.rpc: payload too large, method=' .. tostring(payload.m) .. ', bytes=' .. #body)
         return false, 'too_large'
     end
 
-    local code = MsSendMlEvent(role_id, EVENT, text)
+    local code = MsSendMlEvent(role_id, EVENT, body)
     if code ~= 0 then
         Log.warn('y3.client.rpc: send failed, code=' .. tostring(code) .. ', method=' .. tostring(payload.m))
         return false, 'send_failed'
@@ -164,7 +145,7 @@ end
 local function on_payload(role_id, payload)
     local id = payload.i
     local method = payload.m
-    local body = unpack_data(payload.d)
+    local body = payload.d
     if id ~= nil and method ~= nil then        -- 请求
         local result, err = dispatch(role_id, method, body)
         local ok, send_err = send(role_id, { i = id, d = result, e = err })
@@ -179,14 +160,18 @@ local function on_payload(role_id, payload)
 end
 
 ---@param role_id integer
----@param evalue string
+---@param evalue string 客户端发的字符串会被引擎 json.encode 一次，首尾带引号
 local function on_message(role_id, evalue)
-    local ok, payload = pcall(json.decode, evalue)
-    if not ok or type(payload) ~= 'table' then
-        Log.warn('y3.client.rpc: invalid payload, role=' .. tostring(role_id))
+    if type(evalue) ~= 'string' or evalue:sub(1, 1) ~= '"' or evalue:sub(-1) ~= '"' then
+        Log.warn('y3.client.rpc: invalid message, role=' .. tostring(role_id) .. ', data=' .. tostring(evalue))
         return
     end
 
+    local payload = unpack_payload(evalue:sub(2, -2))
+    if payload == nil then
+        Log.warn('y3.client.rpc: invalid message, role=' .. tostring(role_id))
+        return
+    end
     on_payload(role_id, payload)
 end
 
