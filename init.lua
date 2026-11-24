@@ -33,6 +33,18 @@ y3.timer  = require 'y3.util.timer'
 
 y3.attribute = require 'y3.tools.attribute'
 
+y3.gc = require 'y3.tools.gc'
+
+y3.linked_table = require 'y3.tools.linked_table'
+
+-- 事件系统：Event / Trigger / EventManager / CustomEvent
+y3.event = {
+    Trigger     = require 'y3.tools.trigger',
+    Event       = require 'y3.tools.event',
+    EventManager = require 'y3.tools.event_manager',
+    CustomEvent = require 'y3.tools.custom_event',
+}
+
 y3.await.setSleepWaker(function (time, callback)
     y3.timer.wait(time, callback)
 end)

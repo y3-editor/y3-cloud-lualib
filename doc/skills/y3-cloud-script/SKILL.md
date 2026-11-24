@@ -27,7 +27,8 @@ description: >
     ├── client/       # y3.client：rpc、handshake
     ├── develop/      # y3.develop：eval
     ├── player/       # y3.player：Player 对象、player-attr 属性与广播
-    ├── tools/        # 纯 Lua：class、await、serialization、utility、attribute
+    ├── unit/         # y3.unit：逻辑单位、unit-attr 属性与广播
+    ├── tools/        # 纯 Lua：class、await、serialization、utility、attribute、gc、event/trigger、linked_table
     └── util/         # 依赖引擎：json、redis、base64、timer
 ```
 
@@ -48,6 +49,9 @@ description: >
 | `y3.base64` | 封装内置 `MsBase64Encode` / `MsBase64Decode` |
 | `y3.attribute` | 属性系统：`create()` → `define` / `instance` / `set` / `add` / `get` / `modifier` / `event`，支持公式联动、上下限与 touched 记录 |
 | `y3.player` | 玩家命名空间：静态接口 `y3.player.get(role_id)` / `y3.player.all()`；实例方法在 `Player` 类上 |
+| `y3.unit` | 单位命名空间：`y3.unit.create(key, x, y, face, owner)` / `get` / `all` + `Unit.Sync` 广播；`y3.unit.attr_define` 注册单位属性 |
+| `y3.event` | 事件与触发器：`Trigger` / `Event` / `EventManager` / `CustomEvent`；`Player`、`Unit` 已继承 `CustomEvent`，可 `obj:event_on` / `obj:event_notify` / `obj:event_dispatch` |
+| `y3.gc` | 生命周期回收：`GCHost:bindGC(obj)` 把对象绑到宿主，宿主删除时一并删除；`y3.gc.host()` / `y3.gc.node(fn)` |
 | `y3.class` | 类工具；`init.lua` 同时注入全局 `Class` / `New` / `Extends` / `Delete` / `IsValid` / `Type` / `Alias` / `IsInstanceOf` |
 | `y3.util` | 通用工具（`sortPairs`、`dump`、`inspect` 等），init 里已启用 `<close>` 与 `'{}' % args` 格式化 |
 | `y3.develop.eval` | 云端执行 Lua（`Develop.Eval`），仅 `debug` 时放行 |

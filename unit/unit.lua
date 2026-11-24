@@ -8,10 +8,12 @@
 ---@field face? number 朝向
 ---@field owner? integer 归属玩家 role_id
 
----@class Unit
+---@class Unit: CustomEvent, GCHost
 ---@field uid integer
 ---@field data Unit.Data
 local M = Class 'Unit'
+Extends('Unit', 'CustomEvent')
+Extends('Unit', 'GCHost')
 
 -- 属性相关的静态接口由 unit-attr.lua 实现
 ---@class Unit.API

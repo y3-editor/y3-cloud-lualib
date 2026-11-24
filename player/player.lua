@@ -1,8 +1,9 @@
 -- 云脚本玩家对象：按 role_id 缓存，包装 Ms* 玩家接口
 -- 通知 Player.Sync：属性等方法变更广播给所有客户端；方法 Player.GetAll：客户端拉全量
 
----@class Player
+---@class Player: CustomEvent
 local M = Class 'Player'
+Extends('Player', 'CustomEvent')
 
 -- 属性相关的静态接口由 player-attr.lua 实现
 ---@class Player.API
