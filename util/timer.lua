@@ -93,7 +93,7 @@ end
 
 Timer.new_timer(TICK_MS, tick)
 
----@class CloudTimers
+---@class CloudTimer.API
 local M = {}
 
 ---当前调度时刻（毫秒）

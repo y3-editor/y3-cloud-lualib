@@ -678,6 +678,7 @@ y3.cloud.rpc.request(method, data, callback)   -- callback(suc, data, err)，返
 y3.cloud.rpc.awaitRequest(method, data)        -- 必须在协程内，返回 suc, data, err
 y3.cloud.rpc.notify(method, data)
 y3.cloud.rpc.register(method, callback)        -- callback(data, player) 的返回值作为应答；player 由业务自行判断
+y3.cloud.run(code, callback)                   -- 在云脚本执行 Lua（需云脚本 y3.config.debug）；data 为代码的第一个返回值
 
 -- 云脚本：y3.client 同样是命名空间，请求 / 应答 / 通知 / 广播在 y3.client.rpc
 y3.client.rpc.request(player, method, data, callback)

@@ -3,9 +3,13 @@
 -- util/ 放依赖引擎接口的工具，tools/ 放纯 Lua 工具。
 
 ---@class Y3
+---@field version string
+---@field config { debug: boolean }
 y3 = {}
 
 y3.version = '0.1.0'
+
+y3.config = require 'y3.config'
 
 y3.class = require 'y3.tools.class'
 
@@ -30,5 +34,7 @@ y3.await.setSleepWaker(function (time, callback)
 end)
 
 y3.client = require 'y3.client.init'
+
+y3.develop = require 'y3.develop.init'
 
 return y3

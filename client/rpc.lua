@@ -6,7 +6,7 @@
 
 local json = y3.json
 
----@class ClientRpc
+---@class Client.Rpc
 local M = {
     EVENT = '$Y3Cloud',
     timeout = 5,
