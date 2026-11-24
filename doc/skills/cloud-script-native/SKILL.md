@@ -1,6 +1,20 @@
-# Y3 云脚本开发
+---
+name: cloud-script-native
+description: >
+  Y3 云脚本的引擎原生接口：RegisterEvent 事件表、Ms* 查询/存档/道具/下行 API、redis 客户端、
+  Timer、Log、cjson、运行限制与配额、本地模拟服务与排错。开发 y3 云脚本库本身时看这份。
 
-> 本文是云脚本开发规范与实测结论的归档文档（原编辑器 skill 文档）。引擎官方 API 手册见同目录 `CloudScript.md`。
+  ALWAYS use this skill when user mentions: 云脚本原生接口、RegisterEvent、UnRegisterEvent、
+  MsSendMlEvent、MsGetPlayerName、MsGetScriptArchive、MsSaveScriptArchive、MsTryConsumeItem、
+  MsGetPlayerItem、MsGetRoomGameTime、MsIsProdEnv、redis.get_redis_client、Timer.new_timer、
+  云脚本配额、上行 10KB、下行 10240 字节、本地模拟服务、script_log、mls_archive。
+---
+
+# Y3 云脚本原生接口
+
+> 业务代码优先用 `y3` 云脚本库（`y3.client.rpc` / `y3.await` / `y3.timer` / `y3.redis` 等），见 `../y3-cloud-script/SKILL.md`。本文是库的底层依赖：引擎直接提供的全局函数、配额与排错。
+>
+> 引擎官方 API 手册见 `references/CloudScript.md`。
 
 云脚本在**云脚本服务**中处理玩家请求、查询玩家与道具信息、读写存档，并把结果发回客户端。
 
@@ -323,7 +337,7 @@ client:IncrBy(key, increment, callback)   -- increment: integer
 - 环境判据用官方 `MsIsProdEnv()`；测试设施（GM 通道、`Debug.Eval` 探针、示例自测）只在非正式环境放行
 - handler 需要等 Redis 回调才知道结果的，走自定义事件而非 `rpc.register`（RPC 要求同步返回）
 
-### base64（内置全局函数，2026-11-23 实测）
+### base64（内置全局函数）
 
 ```lua
 local b64 = MsBase64Encode(raw)          -- string -> string，单个返回值
@@ -649,7 +663,7 @@ end
 
 官方教程附带《云脚本参考项目》压缩包（含 `cloud_script/main.lua`、`meta.lua`、`com_api.lua`、`ms_api.lua`、`dao/`、`testcase/`），建议以本地多开运行、连接线上测试环境。新项目接入时先复制基础结构，再替换示例业务代码，并删除示例测试模块的加载行。
 
-- 官方文档：https://163.com/y3/docs/guides/FunctionManual/CloudScript（**地址本身是对的，不要改**）。⚠️ 曾实测该地址 404 且整站导航里搜不到「云脚本」条目——**经确认为文档站临时故障**。**本地副本已入库：同目录 `CloudScript.md`**（源文档 md，含 API 参考 / 运行限制与配额 / 调试与排错），**改云脚本接口前先查它**；官网恢复后只需确认是否有增量
+- 官方文档：https://163.com/y3/docs/guides/FunctionManual/CloudScript；本地副本 `references/CloudScript.md`（API 参考 / 运行限制与配额 / 调试与排错），**改云脚本接口前先查它**
 - **照文档抄示例时注意入口位置差异**：官方教程假设客户端入口是 `maps/<地图名>/script/main.lua`；若项目把地图脚本根放在 `global_script/`（入口 `global_main.lua`，走 `include` 链），别在 `maps/EntryMap/script/` 下另造客户端入口
 - 别与引擎侧平台存档混用：`y3.save_data` 是与云脚本存档完全不同的另一套，对照见 §3 末
 - 地图脚本侧出处：`y3/game/game.lua` 的 `send_mlscript_msg`、`y3/meta/event.lua` 的 `玩家-收到云脚本消息`（字段 `mlscript_event_name` / `mlscript_event_data`）；行号随框架版本变化，按符号检索
@@ -663,51 +677,3 @@ end
 - 热更内容用单个 Redis key 存整段 JSON，只留最新一份 + 毫秒时间戳版本号，与随包发布的 `build_time` 比较判断是否过期
 - 只在 `_roomloaded` 读一次（不轮询），下一局生效
 
-## 附 C. 通讯层（y3.cloud / y3.client）
-
-两端各一个薄封装，共用传输事件 `$Y3Cloud`：
-
-| 端 | 模块 | 全局 |
-|---|---|---|
-| 客户端 | `global_script/y3/cloud/`（入口 `init.lua`） | `y3.cloud` |
-| 云脚本 | `cloud_script/y3/client/`（入口 `init.lua`） | `y3.client` |
-
-```lua
--- 客户端：y3.cloud 是命名空间，请求 / 应答 / 通知在 y3.cloud.rpc
-y3.cloud.rpc.request(method, data, callback)   -- callback(suc, data, err)，返回请求 id
-y3.cloud.rpc.awaitRequest(method, data)        -- 必须在协程内，返回 suc, data, err
-y3.cloud.rpc.notify(method, data)
-y3.cloud.rpc.register(method, callback)        -- callback(data, player) 的返回值作为应答；player 由业务自行判断
-y3.cloud.run(code, callback)                   -- 在云脚本执行 Lua（需云脚本 y3.config.debug）；data 为代码的第一个返回值
-
--- 云脚本：y3.client 同样是命名空间，请求 / 应答 / 通知 / 广播在 y3.client.rpc
-y3.client.rpc.request(player, method, data, callback)
-y3.client.rpc.awaitRequest(player, method, data)
-y3.client.rpc.notify(player, method, data)
-y3.client.rpc.broadcast(method, data)
-y3.client.rpc.register(method, callback)   -- callback(role_id, data) 的返回值作为应答
-```
-
-握手（判断云脚本是否可用、读云脚本 y3 库版本）：
-
-```lua
--- 客户端：握手状态与接口直接挂在 y3.cloud 上
-y3.cloud.ready        -- 是否已握手
-y3.cloud.version      -- 云脚本 y3 库版本
-y3.cloud.debug        -- 云脚本是否开启 debug
-y3.cloud.on_ready(cb) -- 握手完成回调；已握手时立即调用
-y3.cloud.request(cb)  -- 主动握手（请求 Y3Cloud.Hello）
-
--- 云脚本：方法 Y3Cloud.Hello 应答 info()；房间加载 / 玩家加入时推送通知 Y3Cloud.Ready
-y3.client.handshake.info()  -- { version = y3.version, debug = y3.config.debug }
-```
-
-报文：`{ i = 请求 id, m = method, d = base64(y3.seri) 业务数据, e = 错误文本 }`
-
-- **类型由字段组合判定**，不额外传 kind：有 `i` 有 `m` = 请求；有 `i` 无 `m` = 应答；无 `i` 有 `m` = 通知
-- **业务数据走 `y3.seri` 序列化后再 base64**：下行 `mlscript_event_data` 是 `py.Table`，嵌套表不会自动转 Lua 表；seri 二进制还可能含 `\0` 和非法 UTF-8 字节（上行会被静默丢弃、下行会打断通道），必须 base64
-- **成败只看 `e` 是否为 nil**：跨端布尔要过 py 对象，不作为状态字段
-- **目标玩家透传给业务**：下行事件自带目标玩家 `player`（即 `MsSendMlEvent` 的 `role_id`），通讯层不过滤、原样交给 handler，由业务自己判断；报文里不传目标 id
-- `broadcast` 按云脚本已识别的玩家集合逐个发送（`_roomloaded` 的 `player_guids`、`_playerjoin`、任何入站消息）
-- 请求超时默认 5 秒（`M.timeout`，单位秒）；超时以 `suc=false, err='timeout'` 回调
-- 云脚本侧 `awaitRequest` 依赖 `coroutine.isyieldable()`，在普通事件回调里调用会直接报错
