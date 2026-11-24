@@ -13,6 +13,14 @@ local M = {
 
 local EVENT = '$Y3Cloud'
 
+-- 官方限制：事件名最长 32 字节，单条消息最长 10240 字节
+local MAX_EVENT_BYTES = 32
+local MAX_MESSAGE_BYTES = 10240
+
+if #EVENT > MAX_EVENT_BYTES then
+    Log.warn('y3.client.rpc: event name too long, bytes=' .. #EVENT)
+end
+
 ---@alias PlayerRef integer|{ get_id: fun(self: any): integer }
 
 local seq = 0
@@ -86,25 +94,30 @@ end
 
 ---@param role_id integer
 ---@param payload table
----@return boolean
+---@return boolean ok
+---@return string? err
 local function send(role_id, payload)
     if payload.d ~= nil then
         payload.d = pack(payload.d)
         if payload.d == nil then
-            return false
+            return false, 'encode_failed'
         end
     end
 
     local ok, text = pcall(json.encode, payload)
     if not ok then
         Log.warn('y3.client.rpc: encode failed, method=' .. tostring(payload.m) .. ', ' .. tostring(text))
-        return false
+        return false, 'encode_failed'
+    end
+    if #text > MAX_MESSAGE_BYTES then
+        Log.warn('y3.client.rpc: payload too large, method=' .. tostring(payload.m) .. ', bytes=' .. #text)
+        return false, 'too_large'
     end
 
     local code = MsSendMlEvent(role_id, EVENT, text)
     if code ~= 0 then
         Log.warn('y3.client.rpc: send failed, code=' .. tostring(code) .. ', method=' .. tostring(payload.m))
-        return false
+        return false, 'send_failed'
     end
     return true
 end
@@ -154,7 +167,10 @@ local function on_payload(role_id, payload)
     local body = unpack_data(payload.d)
     if id ~= nil and method ~= nil then        -- 请求
         local result, err = dispatch(role_id, method, body)
-        send(role_id, { i = id, d = result, e = err })
+        local ok, send_err = send(role_id, { i = id, d = result, e = err })
+        if not ok and send_err == 'too_large' then
+            send(role_id, { i = id, e = 'payload_too_large' })
+        end
     elseif id ~= nil then                      -- 应答
         settle(id, payload.e, body)
     elseif method ~= nil then                  -- 通知
@@ -228,8 +244,9 @@ function M.request(player, method, data, callback)
         return false
     end)
 
-    if not send(role_id, { i = id, m = method, d = data }) then
-        settle(id, 'send_failed')
+    local ok, send_err = send(role_id, { i = id, m = method, d = data })
+    if not ok then
+        settle(id, send_err or 'send_failed')
     end
     return id
 end
