@@ -20,6 +20,10 @@ Type         = y3.class.type
 Alias        = y3.class.alias
 IsInstanceOf = y3.class.isInstanceOf
 
+y3.util = require 'y3.tools.utility'
+y3.util.enableCloseFunction()
+y3.util.enableFormatString()
+
 y3.seri   = require 'y3.tools.serialization'
 y3.await  = require 'y3.tools.await'
 y3.base64 = require 'y3.util.base64'
