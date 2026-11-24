@@ -28,7 +28,7 @@ local seq = 0
 ---@type table<integer, { callback: fun(suc: boolean, data: any, err: string?)?, timer_id: integer? }>
 local pending = {}
 
----@type table<string, fun(role_id: integer, data: any): any, string?>
+---@type table<string, fun(player: Player, data: any): any, string?>
 local handlers = {}
 
 -- 平台下行本身会广播给房间内所有客户端，role_id 只是消息携带的目标玩家。
@@ -152,9 +152,8 @@ local function dispatch(role_id, method, data)
         return nil, 'no_handler'
     end
 
-    local ok, result, err = pcall(handler, role_id, data)
+    local ok, result, err = xpcall(handler, Log.error, y3.player.get(role_id), data)
     if not ok then
-        Log.warn('y3.client.rpc: handler error, method=' .. tostring(method) .. ', ' .. tostring(result))
         return nil, tostring(result)
     end
     return result, err
@@ -195,9 +194,9 @@ RegisterEvent(EVENT, function (_, role_id, _, evalue)
     on_message(role_id, evalue)
 end)
 
----注册客户端请求 / 通知的处理函数；handler(role_id, data) 的返回值作为请求应答
+---注册客户端请求 / 通知的处理函数；handler(player, data) 的返回值作为请求应答
 ---@param method string
----@param callback fun(role_id: integer, data: any): any, string?
+---@param callback fun(player: Player, data: any): any, string?
 function M.register(method, callback)
     handlers[method] = callback
 end

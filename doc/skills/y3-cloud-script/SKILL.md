@@ -49,9 +49,10 @@ description: >
 | `y3.base64` | 封装内置 `MsBase64Encode` / `MsBase64Decode` |
 | `y3.attribute` | 属性系统：`create()` → `define` / `instance` / `set` / `add` / `get` / `modifier` / `event`，支持公式联动、上下限与 touched 记录 |
 | `y3.player` | 玩家命名空间：静态接口 `y3.player.get(role_id)` / `y3.player.all()`；实例方法在 `Player` 类上 |
-| `y3.unit` | 单位命名空间：`y3.unit.create(key, x, y, face, owner)` / `get` / `all` + `Unit.Sync` 广播；`y3.unit.attr_define` 注册单位属性 |
+| `y3.unit` | 单位命名空间：`y3.unit.create(key, x, y, face, owner)` / `get` / `all`、`Unit.Sync` 广播、`y3.unit.attr_define` 注册单位属性 |
 | `y3.event` | 事件与触发器：`Trigger` / `Event` / `EventManager` / `CustomEvent`；`Player`、`Unit` 已继承 `CustomEvent`，可 `obj:event_on` / `obj:event_notify` / `obj:event_dispatch` |
 | `y3.gc` | 生命周期回收：`GCHost:bindGC(obj)` 把对象绑到宿主，宿主删除时一并删除；`y3.gc.host()` / `y3.gc.node(fn)` |
+| `y3.init` / `y3.on_init` | 初始化事件：模块加载期 `y3.on_init(fn)` 注册，入口末尾 `y3.init()` 按注册顺序执行 |
 | `y3.class` | 类工具；`init.lua` 同时注入全局 `Class` / `New` / `Extends` / `Delete` / `IsValid` / `Type` / `Alias` / `IsInstanceOf` |
 | `y3.util` | 通用工具（`sortPairs`、`dump`、`inspect` 等），init 里已启用 `<close>` 与 `'{}' % args` 格式化 |
 | `y3.develop.eval` | 云端执行 Lua（`Develop.Eval`），仅 `debug` 时放行 |
@@ -60,7 +61,7 @@ description: >
 
 ```lua
 -- 云脚本
-y3.client.rpc.register(method, function (role_id, data) return result end)
+y3.client.rpc.register(method, function (player, data) return result end)
 y3.client.rpc.request(player, method, data, function (suc, result, err) end)
 y3.client.rpc.awaitRequest(player, method, data)   -- 协程内，返回 suc, result, err
 y3.client.rpc.notify(player, method, data)
@@ -151,21 +152,54 @@ local mod = player:attr_modify('金币', 100)   -- Attribute.Modifier：mod:upda
 
 `to_client` 为 true 的属性会 `recordTouch` 并进入全量与增量下发；为 false 的只留在云端。属性系统在首次 `system:instance()` 时才编译，所以 `attr_define` 必须在创建第一个玩家属性实例之前调用（放在 `cloud_script/config.lua`，由 `main.lua` 早于业务 require）。`exited` 只表示背后的用户退出，玩家属性照常计算与广播。
 
-## 8. 调试
+## 8. 单位
+
+```lua
+local unit = y3.unit.create(134224145, 100, 200, 0, role_id)   -- key, x, y, face, owner
+unit:move_to(300, 200)    -- 下发移动命令，客户端驱动 Y3 寻路
+unit:teleport(500, 500)   -- 云权威位移，不经过寻路
+unit:stop()
+unit:get_pos()            -- 当前最优位置（寻路中按采样插值）
+```
+
+单位的所有同步都走同一条 `Unit.Sync`（100 ms 窗口合并）：
+
+| 字段 | 内容 |
+|---|---|
+| `create` | `{ [uid] = { key, x, y, face, owner } }` |
+| `remove` | `{ [uid] = true }` |
+| `attribute` | `{ [uid] = { [属性名] = 值 } }` |
+| `command` | `{ [uid] = { move_to = {x,y} } }` / `{ teleport = {...} }` / `{ stop = true }` |
+
+寻路段由客户端回传，协议 `Unit.Pos.Report`（reporter → 云，notify）：
+
+```lua
+{ seq, start = { [uid] = true } }        -- 寻路开始（只作信号，起点由云端取上次结束的位置）
+{ seq, units = { [uid] = { x, y } } }    -- 200 ms 采样，包含全部寻路中的云端单位
+{ seq, stop  = { [uid] = { x, y } } }    -- 寻路结束
+```
+
+- 云端只接受一个 reporter（存活玩家中最小 `role_id`），1 s 心跳、3 s 超时重选，`seq` 单调去重
+- `start` 只作信号：起点用云端当前（= 上次结束）位置，接受上报前先做速度合理性校验（距离 > `移动速度 × dt × 1.5` 的丢弃，`移动速度` 未注册时按 1000）
+- 插值惰性求值：`get_pos(now?)` 用最近 3 个采样分段线性，超出最后采样时按最近速度沿目标方向外推；同一时刻结果缓存
+- 位置误差上界 ≈ `移动速度 × 采样间隔`（1000 速 / 200 ms ≈ 2 身位），依赖位置的判定要留容差；精确命中仍由客户端算
+
+## 9. 调试
 
 - `y3.develop.eval`：客户端 `y3.cloud.run(code, cb)` → 云脚本执行，返回第一个返回值；需 `y3.config.debug`
 - 客户端控制台 `~` 前缀：先检查 `y3.cloud.ready`，再调用 `y3.cloud.run` 并回显结果或错误
 - 日志用大写 `Log.info/warn/error`；客户端侧看 `[mlscript]` 转发，判据以 `cloud_script/script_log` 为准
 
-## 9. 写业务的约束
+## 10. 写业务的约束
 
 - `main.lua` 只做 require 编排，业务放 `game/`
 - 全局能力由 `y3/init.lua` 统一装配：新增库模块在那里挂 `y3.<name>`，模块自己挂全局，init 只 `require`
+- 启动逻辑用初始化事件：各模块在加载期 `y3.on_init(fn)` 注册，`main.lua` 最后调 `y3.init()` 统一触发（幂等；`y3.init()` 之后注册的回调立即执行）；不要在 require 期间直接建单位、发消息
 - 存档带 `schema_version`，解析失败不覆盖旧档
 - base64 用 `y3.base64`；二进制跨端必须 base64（原样上行会丢非法 UTF-8、下行含 `\0` 会打断通道）
 - 只 `include`/`require` 库与业务模块，不依赖本地文件与 C 模块
 
-## 10. 参考
+## 11. 参考
 
 - 原生接口 / 配额 / 排错：`../cloud-script-native/SKILL.md`
 - 引擎官方手册：`../cloud-script-native/references/CloudScript.md`

@@ -43,13 +43,13 @@ local function preview(code)
 end
 
 ---执行任意 Lua 代码，返回值数组原样回传（不做 tostring）
----@param role_id integer
+---@param player Player
 ---@param data any
 ---@return table|nil
 ---@return string|nil
-local function on_eval(role_id, data)
+local function on_eval(player, data)
     if not config.debug then
-        Log.warn('y3.develop.eval: disabled, role=' .. tostring(role_id))
+        Log.warn('y3.develop.eval: disabled, role=' .. tostring(player:get_id()))
         return nil, 'eval_disabled'
     end
 
@@ -61,7 +61,7 @@ local function on_eval(role_id, data)
         return nil, 'code_too_large'
     end
 
-    Log.info('y3.develop.eval: role=' .. tostring(role_id) .. ' code=' .. preview(code))
+    Log.info('y3.develop.eval: role=' .. tostring(player:get_id()) .. ' code=' .. preview(code))
 
     local chunk, load_err = wrap_code(code)
     if not chunk then

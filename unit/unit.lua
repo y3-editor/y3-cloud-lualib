@@ -1,9 +1,9 @@
-﻿-- 云端逻辑单位：创建 / 移除 / 属性变更，同一 tick 合成一条广播
--- 方法 Unit.GetAll：客户端拉全量；通知 Unit.Sync：{ create, remove, attribute }
+﻿-- 云端逻辑单位：创建 / 移除 / 移动命令 / 属性变更，同一 tick 合成一条广播
+-- 方法 Unit.GetAll：客户端拉全量；通知 Unit.Sync：{ create, remove, attribute, command }
 
 ---@class Unit.Data
 ---@field key integer 物编单位 key（py.UnitKey）
----@field x number
+---@field x number 出生点
 ---@field y number
 ---@field face? number 朝向
 ---@field owner? integer 归属玩家 role_id
@@ -11,6 +11,10 @@
 ---@class Unit: CustomEvent, GCHost
 ---@field uid integer
 ---@field data Unit.Data
+---@field current_pos? { x: number, y: number, t: integer } 最新位置与时刻
+---@field last_pos? { x: number, y: number, t: integer } 上一个位置与时刻
+---@field _is_moving? boolean 是否在寻路
+---@field _pos_cache? { x: number, y: number }
 local M = Class 'Unit'
 Extends('Unit', 'CustomEvent')
 Extends('Unit', 'GCHost')
@@ -35,38 +39,80 @@ local created = {}
 ---@type table<integer, true>
 local removed = {}
 
+---@type table<integer, table<string, any>>
+local commands = {}
+
 ---@param uid integer
 ---@param data Unit.Data
 function M:__init(uid, data)
     self.uid = uid
     self.data = data
+    self:update_pos(data.x, data.y)
 end
 
 ---移除这个单位
 function M:remove()
+    self:mark_moving(false)
     cache[self.uid] = nil
     created[self.uid] = nil
+    commands[self.uid] = nil
     removed[self.uid] = true
+end
+
+---@param command table<string, any>
+function M:push_command(command)
+    commands[self.uid] = command
+end
+
+---客户端表现所需的单位数据（位置取当前值）
+---@return Unit.Data
+function M:get_sync_data()
+    local x, y = self:get_pos()
+    return {
+        key = self.data.key,
+        x = x,
+        y = y,
+        face = self.data.face,
+        owner = self.data.owner,
+    }
+end
+
+---直接改位置，不经过寻路
+---@param x number
+---@param y number
+function M:teleport(x, y)
+    self:update_pos(x, y)
+    -- TODO 同步给客户端
+end
+
+---停步
+function M:stop()
+    local x, y = self:get_pos()
+    self:mark_moving(false)
+    self:update_pos(x, y)
 end
 
 local function flush()
     local create_list = created
     local remove_list = removed
+    local command_list = commands
     created = {}
     removed = {}
+    commands = {}
     local attribute = API.attr_drain()
-    if not next(create_list) and not next(remove_list) and not next(attribute) then
+    if not next(create_list) and not next(remove_list) and not next(attribute) and not next(command_list) then
         return
     end
 
     local payload = {}
     for uid, unit in pairs(create_list) do
-        payload[uid] = unit.data
+        payload[uid] = unit:get_sync_data()
     end
     y3.client.rpc.broadcast('Unit.Sync', {
         create = payload,
         remove = remove_list,
         attribute = attribute,
+        command = command_list,
     })
 end
 
@@ -75,7 +121,7 @@ y3.timer.loop(FLUSH_INTERVAL, flush)
 y3.client.rpc.register('Unit.GetAll', function ()
     local units = {}
     for uid, unit in pairs(cache) do
-        units[uid] = unit.data
+        units[uid] = unit:get_sync_data()
     end
     return {
         units = units,
