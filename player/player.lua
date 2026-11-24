@@ -1,7 +1,17 @@
 -- 云脚本玩家对象：按 role_id 缓存，包装 Ms* 玩家接口
+-- 通知 Player.Sync：属性等方法变更广播给所有客户端；方法 Player.GetAll：客户端拉全量
 
 ---@class Player
 local M = Class 'Player'
+
+-- 属性相关的静态接口由 player-attr.lua 实现
+---@class Player.API
+---@field attr_drain fun(): table<integer, table<string, number>>
+---@field attr_all fun(): table<integer, table<string, number>>
+local API = y3.player
+
+-- 合并窗口（秒）
+local FLUSH_INTERVAL = 0.1
 
 ---@type table<integer, Player>
 local cache = {}
@@ -95,6 +105,20 @@ RegisterEvent('_playerjoin', function (_, role_id)
         return
     end
     y3.player.get(role_id).exited = false
+end)
+
+local function flush()
+    local attribute = API.attr_drain()
+    if not next(attribute) then
+        return
+    end
+    y3.client.rpc.broadcast('Player.Sync', { attribute = attribute })
+end
+
+y3.timer.loop(FLUSH_INTERVAL, flush)
+
+y3.client.rpc.register('Player.GetAll', function ()
+    return { attribute = API.attr_all() }
 end)
 
 ---取玩家对象，同一个 role_id 返回同一实例

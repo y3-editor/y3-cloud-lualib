@@ -1,11 +1,10 @@
--- 玩家属性：属性注册、属性实例、变更广播
--- 方法 Player.Attr.GetAll：客户端拉全房间玩家属性；通知 Player.Attr.Sync：变更广播给所有客户端
+-- 玩家属性：属性注册、属性实例、变更收集（由 player.lua 的 flush 统一广播）
 
 ---@class Player
 local M = Class 'Player'
 
--- 变更合并窗口（秒）。窗口内的改动合成一次广播，控制下行量
-local FLUSH_INTERVAL = 0.1
+---@class Player.API
+local API = y3.player
 
 local system = y3.attribute.create()
 
@@ -50,21 +49,12 @@ function M:attr_modify(name, value)
     return self:attr():modifier(name, value)
 end
 
----@param player Player
----@return table<string, number>
-local function collect(player)
-    local values = {}
-    local inst = player:attr()
-    for name in pairs(CLIENT_ATTRS) do
-        values[name] = inst:get(name)
-    end
-    return values
-end
-
-local function flush()
+---取出本窗口内变化的属性，只留与旧值不同的
+---@return table<integer, table<string, number>>
+function API.attr_drain()
     local touched = system:getTouched()
     if not touched then
-        return
+        return {}
     end
 
     local players = {}
@@ -83,20 +73,23 @@ local function flush()
             end
         end
     end
-    if next(players) then
-        y3.client.rpc.broadcast('Player.Attr.Sync', { players = players })
-    end
+    return players
 end
 
-y3.timer.loop(FLUSH_INTERVAL, flush)
-
-y3.client.rpc.register('Player.Attr.GetAll', function ()
+---所有玩家的下发属性快照
+---@return table<integer, table<string, number>>
+function API.attr_all()
     local players = {}
     for role_id, player in pairs(y3.player.all()) do
-        players[role_id] = collect(player)
+        local values = {}
+        local inst = player:attr()
+        for name in pairs(CLIENT_ATTRS) do
+            values[name] = inst:get(name)
+        end
+        players[role_id] = values
     end
-    return { players = players }
-end)
+    return players
+end
 
 ---注册玩家属性；必须在第一次创建属性实例之前调用
 ---@param name string 属性名
@@ -104,7 +97,7 @@ end)
 ---@param max? number|string 上限，可填另一个属性名做联动
 ---@param to_client? boolean 是否随广播同步给客户端
 ---@return Attribute.Define
-function y3.player.attr_define(name, min, max, to_client)
+function API.attr_define(name, min, max, to_client)
     local define = system:define(name, true, min, max)
     if to_client then
         CLIENT_ATTRS[name] = true

@@ -41,6 +41,8 @@ require 'y3.client'
 
 require 'y3.player'
 
+require 'y3.unit'
+
 require 'y3.develop'
 
 return y3

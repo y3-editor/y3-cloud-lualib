@@ -134,14 +134,16 @@ local mod = player:attr_modify('金币', 100)   -- Attribute.Modifier：mod:upda
 
 `Player` 有 `get_id()`，可直接当 `y3.client.rpc.*` 的 player 参数。`try_consume_item` 返回成功只表示扣减已受理，新数量以 `_item_info_changed` / `_consume_item_notify` 为准；`player:is_exited()` 由 `_playerexit` / `_playerjoin` 维护，实例常驻不回收。
 
-属性变更由属性系统的 `getTouched()` 收集，`y3.timer.loop(0.1)` 每 100 ms 把窗口内所有变化过的玩家合成一条消息广播（`modifier` 的 update / remove 同样被收集）：
+属性变更由属性系统的 `getTouched()` 收集，`y3.timer.loop(0.1)` 每 100 ms 把窗口内所有变化过的玩家合成**一条** `Player.Sync`（`modifier` 的 update / remove 同样被收集），单位侧同理由 `Unit.Sync` 承担：
 
 | 方法 | 方向 | 报文 |
 |---|---|---|
-| `Player.Attr.GetAll` | 客户端 → 云 | 无 data，应答 `{ players = { [role_id] = { ['金币'] = 100 } } }` |
-| `Player.Attr.Sync` | 云 → 客户端（广播，`role_id = 0`） | `{ players = { [role_id] = { ['金币'] = 100 } } }`，只含 touched 且当前值与旧值不同的属性 |
+| `Player.GetAll` | 客户端 → 云 | 无 data，应答 `{ attribute = { [role_id] = { ['金币'] = 100 } } }` |
+| `Player.Sync` | 云 → 客户端（广播，`role_id = 0`） | `{ attribute = { [role_id] = { ['金币'] = 100 } } }`，只含 touched 且当前值与旧值不同的属性 |
 
-客户端对应 `y3.cloud.attribute`：收到全量与增量后逐项调用 `Player:set(name, value)` 写进 Y3；`y3.cloud.attribute.set_player_hook(fn)` 注册钩子 `fn(player, name, value)`，钩子返回 true 时该属性不再写入 Y3。客户端不缓存属性。
+新增的玩家同步数据也挂进同一个 `Player.Sync` 报文（新增字段），不要再另开协议。
+
+客户端对应 `y3.cloud.player`：收到全量与增量后逐项调用 `Player:set(name, value)` 写进 Y3；`y3.cloud.player.set_player_hook(fn)` 注册钩子 `fn(player, name, value)`，钩子返回 true 时该属性不再写入 Y3。客户端不缓存属性。
 
 `to_client` 为 true 的属性会 `recordTouch` 并进入全量与增量下发；为 false 的只留在云端。属性系统在首次 `system:instance()` 时才编译，所以 `attr_define` 必须在创建第一个玩家属性实例之前调用（放在 `cloud_script/config.lua`，由 `main.lua` 早于业务 require）。`exited` 只表示背后的用户退出，玩家属性照常计算与广播。
 

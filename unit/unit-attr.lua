@@ -1,0 +1,107 @@
+﻿-- 单位属性：属性注册、属性实例、变更收集（由 unit.lua 的 flush 统一广播）
+
+---@class Unit
+local M = Class 'Unit'
+
+---@class Unit.API
+local API = y3.unit
+
+local system = y3.attribute.create()
+
+---@type table<string, true>
+local CLIENT_ATTRS = {}
+
+---属性实例，首次访问时按已注册的属性建
+---@return Attribute.Instance
+function M:attr()
+    local inst = self.attr_instance
+    if inst then
+        return inst
+    end
+    inst = system:instance(self)
+    self.attr_instance = inst
+    return inst
+end
+
+---@param name string
+---@return number
+function M:attr_get(name)
+    return self:attr():get(name)
+end
+
+---@param name string
+---@param value number
+function M:attr_set(name, value)
+    self:attr():set(name, value)
+end
+
+---@param name string
+---@param value number
+function M:attr_add(name, value)
+    self:attr():add(name, value)
+end
+
+-- 持有加成：撤销用 `modifier:remove()`，改值用 `modifier:update(value)`
+---@param name string
+---@param value number
+---@return Attribute.Modifier
+function M:attr_modify(name, value)
+    return self:attr():modifier(name, value)
+end
+
+---取出本窗口内变化的属性，只留仍存在且与旧值不同的
+---@return table<integer, table<string, number>>
+function API.attr_drain()
+    local touched = system:getTouched()
+    if not touched then
+        return {}
+    end
+
+    local units = {}
+    for instance, changed in pairs(touched) do
+        local unit = instance.customData
+        if unit and y3.unit.get(unit.uid) then
+            local values = {}
+            for name, old in pairs(changed) do
+                local value = instance:get(name)
+                if value ~= old then
+                    values[name] = value
+                end
+            end
+            if next(values) then
+                units[unit.uid] = values
+            end
+        end
+    end
+    return units
+end
+
+---所有单位的下发属性快照
+---@return table<integer, table<string, number>>
+function API.attr_all()
+    local units = {}
+    for uid, unit in pairs(y3.unit.all()) do
+        local values = {}
+        local inst = unit:attr()
+        for name in pairs(CLIENT_ATTRS) do
+            values[name] = inst:get(name)
+        end
+        units[uid] = values
+    end
+    return units
+end
+
+---注册单位属性；必须在第一次创建属性实例之前调用
+---@param name string 属性名
+---@param min? number|string 下限，可填另一个属性名做联动
+---@param max? number|string 上限，可填另一个属性名做联动
+---@param to_client? boolean 是否随广播同步给客户端
+---@return Attribute.Define
+function API.attr_define(name, min, max, to_client)
+    local define = system:define(name, true, min, max)
+    if to_client then
+        CLIENT_ATTRS[name] = true
+        define:recordTouch()
+    end
+    return define
+end
