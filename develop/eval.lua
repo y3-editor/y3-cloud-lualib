@@ -6,6 +6,33 @@ local config = require 'y3.config'
 local MAX_CODE_BYTES = 4096
 local PREVIEW_BYTES = 256
 
+local KEYWORDS = {
+    ['and'] = true, ['break'] = true, ['do'] = true, ['else'] = true, ['elseif'] = true,
+    ['end'] = true, ['for'] = true, ['function'] = true, ['if'] = true, ['in'] = true,
+    ['local'] = true, ['or'] = true, ['repeat'] = true, ['return'] = true, ['then'] = true,
+    ['until'] = true, ['while'] = true,
+}
+
+---编译代码：不是语句关键字开头时先尝试按表达式编译，支持不写 return
+---@param code string
+---@return function? chunk
+---@return string? err
+local function wrap_code(code)
+    local first_token = code:match('^%s*([%w_]+)')
+    if not first_token or not KEYWORDS[first_token] then
+        local chunk = load('return ' .. code, '=cloud-eval', 't')
+        if chunk then
+            return chunk
+        end
+    end
+
+    local chunk, err = load(code, '=cloud-eval', 't')
+    if chunk then
+        return chunk
+    end
+    return nil, err
+end
+
 ---@param code string
 ---@return string
 local function preview(code)
@@ -36,7 +63,7 @@ local function on_eval(role_id, data)
 
     Log.info('y3.develop.eval: role=' .. tostring(role_id) .. ' code=' .. preview(code))
 
-    local chunk, load_err = load(code, '=cloud-eval', 't')
+    local chunk, load_err = wrap_code(code)
     if not chunk then
         Log.warn('y3.develop.eval: load error, ' .. tostring(load_err))
         return nil, 'load_error: ' .. tostring(load_err)
@@ -54,4 +81,4 @@ end
 
 y3.client.rpc.register('Develop.Eval', on_eval)
 
-return on_eval
+y3.develop.eval = on_eval

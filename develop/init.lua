@@ -1,9 +1,6 @@
--- 开发 / 调试能力命名空间：y3.develop
--- eval 模块在加载时向 y3.client.rpc 注册 Develop.Eval
+-- 开发 / 调试能力入口：y3.develop
 
 ---@class Develop
-local M = {}
+y3.develop = {}
 
-M.eval = require 'y3.develop.eval'
-
-return M
+require 'y3.develop.eval'

@@ -8,9 +8,10 @@ local json = y3.json
 
 ---@class Client.Rpc
 local M = {
-    EVENT = '$Y3Cloud',
     timeout = 5,
 }
+
+local EVENT = '$Y3Cloud'
 
 ---@alias PlayerRef integer|{ get_id: fun(self: any): integer }
 
@@ -100,7 +101,7 @@ local function send(role_id, payload)
         return false
     end
 
-    local code = MsSendMlEvent(role_id, M.EVENT, text)
+    local code = MsSendMlEvent(role_id, EVENT, text)
     if code ~= 0 then
         Log.warn('y3.client.rpc: send failed, code=' .. tostring(code) .. ', method=' .. tostring(payload.m))
         return false
@@ -175,7 +176,7 @@ local function on_message(role_id, evalue)
     on_payload(role_id, payload)
 end
 
-RegisterEvent(M.EVENT, function (_, role_id, _, evalue)
+RegisterEvent(EVENT, function (_, role_id, _, evalue)
     on_message(role_id, evalue)
 end)
 
@@ -275,4 +276,4 @@ function M.awaitRequest(player, method, data)
     end)
 end
 
-return M
+y3.client.rpc = M

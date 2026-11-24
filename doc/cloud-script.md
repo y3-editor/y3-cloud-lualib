@@ -688,6 +688,20 @@ y3.client.rpc.broadcast(method, data)
 y3.client.rpc.register(method, callback)   -- callback(role_id, data) 的返回值作为应答
 ```
 
+握手（判断云脚本是否可用、读云脚本 y3 库版本）：
+
+```lua
+-- 客户端：握手状态与接口直接挂在 y3.cloud 上
+y3.cloud.ready        -- 是否已握手
+y3.cloud.version      -- 云脚本 y3 库版本
+y3.cloud.debug        -- 云脚本是否开启 debug
+y3.cloud.on_ready(cb) -- 握手完成回调；已握手时立即调用
+y3.cloud.request(cb)  -- 主动握手（请求 Y3Cloud.Hello）
+
+-- 云脚本：方法 Y3Cloud.Hello 应答 info()；房间加载 / 玩家加入时推送通知 Y3Cloud.Ready
+y3.client.handshake.info()  -- { version = y3.version, debug = y3.config.debug }
+```
+
 报文：`{ i = 请求 id, m = method, d = base64(y3.seri) 业务数据, e = 错误文本 }`
 
 - **类型由字段组合判定**，不额外传 kind：有 `i` 有 `m` = 请求；有 `i` 无 `m` = 应答；无 `i` 有 `m` = 通知
