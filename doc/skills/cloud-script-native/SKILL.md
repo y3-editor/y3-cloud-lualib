@@ -299,6 +299,7 @@ local code = MsSendMlEvent(role_id, event_name, event_msg)
 - 事件名超限返回 `4`，消息超限返回 `6`，超限消息不进入发送队列
 - 返回 `0` 只表示已被接受入队，不代表客户端已收到并处理
 - `role_id` 只是消息携带的目标玩家，消息仍广播给全房间
+- 实测：`role_id` 必须是整数，`0` 与 `-1` 都被接受（返回 `0`），`nil` 直接报 `the first parameter should be player_id(Integer)`；用 `0` / `-1` 发时客户端事件参数 `player` 为 `nil`，客户端只能按 payload 内容判断归属
 - 发 JSON 时按**编码后**的字符串检查长度（`#` 得到字节数，中文占多字节）
 
 `MsEnd(role_id, reason)` 已废弃，不要在新代码或测试中调用。

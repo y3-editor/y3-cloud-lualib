@@ -31,8 +31,9 @@ local pending = {}
 ---@type table<string, fun(role_id: integer, data: any): any, string?>
 local handlers = {}
 
----@type table<integer, true>
-local players = {}
+-- 平台下行本身会广播给房间内所有客户端，role_id 只是消息携带的目标玩家。
+-- 实测：0 与 -1 都能被接受，nil 报错；客户端侧收到时事件参数 player 为 nil。
+local BROADCAST_ROLE_ID = 0
 
 ---@return integer
 local function next_id()
@@ -181,8 +182,6 @@ end
 ---@param role_id integer
 ---@param evalue string
 local function on_message(role_id, evalue)
-    players[role_id] = true
-
     local ok, payload = pcall(json.decode, evalue)
     if not ok or type(payload) ~= 'table' then
         Log.warn('y3.client.rpc: invalid payload, role=' .. tostring(role_id))
@@ -194,26 +193,6 @@ end
 
 RegisterEvent(EVENT, function (_, role_id, _, evalue)
     on_message(role_id, evalue)
-end)
-
-RegisterEvent('_roomloaded', function (_, _, _, player_guids)
-    local ok, err = pcall(function ()
-        ---@cast player_guids table
-        for _, role_id in ipairs(player_guids) do
-            players[role_id] = true
-        end
-    end)
-    if not ok then
-        Log.warn('y3.client.rpc: player_guids invalid, ' .. tostring(err))
-    end
-end)
-
-RegisterEvent('_playerjoin', function (_, role_id)
-    players[role_id] = true
-end)
-
-RegisterEvent('_playerexit', function (_, role_id)
-    players[role_id] = nil
 end)
 
 ---注册客户端请求 / 通知的处理函数；handler(role_id, data) 的返回值作为请求应答
@@ -265,18 +244,12 @@ function M.notify(player, method, data)
     return send(role_id, { m = method, d = data })
 end
 
----向房间内所有已识别的客户端发通知
+---向房间内所有客户端发通知：一次发送，由平台广播
 ---@param method string
 ---@param data any
----@return integer 实际发送的客户端数
+---@return boolean
 function M.broadcast(method, data)
-    local count = 0
-    for role_id in pairs(players) do
-        if send(role_id, { m = method, d = data }) then
-            count = count + 1
-        end
-    end
-    return count
+    return send(BROADCAST_ROLE_ID, { m = method, d = data })
 end
 
 ---等待客户端应答（必须在协程中调用），返回 suc, data, err
