@@ -4,3 +4,4 @@
 y3.develop = {}
 
 require 'y3.develop.eval'
+require 'y3.develop.stats'
