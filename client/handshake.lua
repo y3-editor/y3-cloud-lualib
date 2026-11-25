@@ -24,12 +24,12 @@ local function push(role_id)
 end
 
 RegisterEvent('_roomloaded', function ()
-    push(nil)
+    xpcall(push, Log.error, nil)
 end)
 
 RegisterEvent('_playerjoin', function (_, role_id)
     if role_id ~= -1 then
-        push(role_id)
+        xpcall(push, Log.error, role_id)
     end
 end)
 

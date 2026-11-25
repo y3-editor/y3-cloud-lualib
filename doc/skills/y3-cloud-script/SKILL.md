@@ -28,8 +28,8 @@ description: >
     ├── develop/      # y3.develop：eval
     ├── player/       # y3.player：Player 对象、player-attr 属性与广播
     ├── unit/         # y3.unit：逻辑单位、unit-attr 属性与广播
-    ├── tools/        # 纯 Lua：class、await、serialization、utility、attribute、gc、event/trigger、linked_table
-    └── util/         # 依赖引擎：json、redis、base64、timer
+    ├── tools/        # 纯 Lua（与客户端同名文件保持一致）：class、await、serialization、utility、attribute、gc、event、linked_table
+    └── util/         # 依赖引擎：json、redis、base64、timer、trigger
 ```
 
 `require` 根目录是 `cloud_script/`，`require 'y3'` 解析到 `y3/init.lua`。
@@ -50,7 +50,7 @@ description: >
 | `y3.attribute` | 属性系统：`create()` → `define` / `instance` / `set` / `add` / `get` / `modifier` / `event`，支持公式联动、上下限与 touched 记录 |
 | `y3.player` | 玩家命名空间：静态接口 `y3.player.get(role_id)` / `y3.player.all()`；实例方法在 `Player` 类上 |
 | `y3.unit` | 单位命名空间：`y3.unit.create(key, x, y, face, owner)` / `get` / `all`、`Unit.Sync` 广播、`y3.unit.attr_define` 注册单位属性 |
-| `y3.event` | 事件与触发器：`Trigger` / `Event` / `EventManager` / `CustomEvent`；`Player`、`Unit` 已继承 `CustomEvent`，可 `obj:event_on` / `obj:event_notify` / `obj:event_dispatch` |
+| `y3.event` | 事件与触发器：`trigger` / `event` / `eventManager` / `customEvent`（对应全局类 `Trigger` / `Event` / `EventManager` / `CustomEvent`）；`Player`、`Unit` 已继承 `CustomEvent`，可 `obj:event_on` / `obj:event_notify` / `obj:event_dispatch` |
 | `y3.gc` | 生命周期回收：`GCHost:bindGC(obj)` 把对象绑到宿主，宿主删除时一并删除；`y3.gc.host()` / `y3.gc.node(fn)` |
 | `y3.init` / `y3.on_init` | 初始化事件：模块加载期 `y3.on_init(fn)` 注册，入口末尾 `y3.init()` 按注册顺序执行 |
 | `y3.class` | 类工具；`init.lua` 同时注入全局 `Class` / `New` / `Extends` / `Delete` / `IsValid` / `Type` / `Alias` / `IsInstanceOf` |
@@ -197,6 +197,7 @@ unit:get_pos()            -- 当前最优位置（寻路中按采样插值）
 - 全局能力由 `y3/init.lua` 统一装配：新增库模块在那里挂 `y3.<name>`，模块自己挂全局，init 只 `require`
 - 启动逻辑用初始化事件：各模块在加载期 `y3.on_init(fn)` 注册，`main.lua` 最后调 `y3.init()` 统一触发（幂等；`y3.init()` 之后注册的回调立即执行）；不要在 require 期间直接建单位、发消息
 - 存档带 `schema_version`，解析失败不覆盖旧档
+- 回调一律兜底：事件 / 定时器 / RPC 处理器统一用 `xpcall(fn, Log.error, ...)`，单个回调抛错不许打哑后续事件；业务新写的事件回调、`y3.timer.*` 回调照此处理
 - base64 用 `y3.base64`；二进制跨端必须 base64（原样上行会丢非法 UTF-8、下行含 `\0` 会打断通道）
 - 只 `include`/`require` 库与业务模块，不依赖本地文件与 C 模块
 

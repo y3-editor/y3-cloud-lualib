@@ -89,23 +89,29 @@ function M:save_archive(text)
 end
 
 RegisterEvent('_roomloaded', function (_, _, _, player_guids)
-    if type(player_guids) ~= 'table' then
-        return
-    end
-    for _, role_id in ipairs(player_guids) do
-        y3.player.get(role_id)
-    end
+    xpcall(function ()
+        if type(player_guids) ~= 'table' then
+            return
+        end
+        for _, role_id in ipairs(player_guids) do
+            y3.player.get(role_id)
+        end
+    end, Log.error)
 end)
 
 RegisterEvent('_playerexit', function (_, role_id)
-    y3.player.get(role_id).exited = true
+    xpcall(function ()
+        y3.player.get(role_id).exited = true
+    end, Log.error)
 end)
 
 RegisterEvent('_playerjoin', function (_, role_id)
     if role_id == -1 then
         return
     end
-    y3.player.get(role_id).exited = false
+    xpcall(function ()
+        y3.player.get(role_id).exited = false
+    end, Log.error)
 end)
 
 local function flush()

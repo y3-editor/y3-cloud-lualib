@@ -117,7 +117,7 @@ local function settle(id, err, data)
         Timer.cancel_timer(entry.timer_id)
     end
     if entry.callback then
-        entry.callback(err == nil, data, err)
+        xpcall(entry.callback, Log.error, err == nil, data, err)
     end
 end
 
@@ -176,7 +176,7 @@ local function on_message(role_id, evalue)
 end
 
 RegisterEvent(EVENT, function (_, role_id, _, evalue)
-    on_message(role_id, evalue)
+    xpcall(on_message, Log.error, role_id, evalue)
 end)
 
 ---注册客户端请求 / 通知的处理函数；handler(player, data) 的返回值作为请求应答

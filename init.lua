@@ -39,10 +39,10 @@ y3.linked_table = require 'y3.tools.linked_table'
 
 -- 事件系统：Event / Trigger / EventManager / CustomEvent
 y3.event = {
-    Trigger     = require 'y3.tools.trigger',
-    Event       = require 'y3.tools.event',
-    EventManager = require 'y3.tools.event_manager',
-    CustomEvent = require 'y3.tools.custom_event',
+    trigger      = require 'y3.util.trigger',
+    event        = require 'y3.tools.event',
+    eventManager = require 'y3.tools.event_manager',
+    customEvent  = require 'y3.tools.custom_event',
 }
 
 y3.await.setSleepWaker(function (time, callback)

@@ -1,5 +1,5 @@
 local linked_table = require 'y3.tools.linked_table'
-local Trigger = require 'y3.tools.trigger'
+local Trigger = require 'y3.util.trigger'
 
 ---@class Event
 ---@field private event_name Event.Name

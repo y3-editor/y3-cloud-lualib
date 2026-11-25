@@ -47,10 +47,7 @@ function CloudTimer:update(current_ms)
     self.last_ms = current_ms
     self.count = self.count + 1
 
-    local ok, err = pcall(self.on_timer, self, self.count)
-    if not ok then
-        Log.error('y3.timer: callback error, ' .. tostring(err))
-    end
+    xpcall(self.on_timer, Log.error, self, self.count)
 
     if self.removed then
         return false
