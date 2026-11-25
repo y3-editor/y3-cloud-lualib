@@ -62,7 +62,4 @@ function API.new(x, y)
     return New 'Point' (x, y)
 end
 
----@type Point
-API.Point = M
-
 return API
