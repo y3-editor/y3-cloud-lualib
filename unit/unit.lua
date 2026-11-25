@@ -79,18 +79,18 @@ function M:get_sync_data()
 end
 
 ---下达移动命令：客户端驱动 Y3 寻路，位置仍以客户端上报为准
----@param x number
----@param y number
-function M:move_to(x, y)
+---@param point Point 目标点
+function M:move_to(point)
+    local x, y = point:get_x(), point:get_y()
     self.target_pos = { x = x, y = y }
     self:mark_moving(true)
     self:push_command({ move_to = { x = x, y = y } })
 end
 
 ---直接改位置，不经过寻路
----@param x number
----@param y number
-function M:teleport(x, y)
+---@param point Point 目标点
+function M:teleport(point)
+    local x, y = point:get_x(), point:get_y()
     self.target_pos = nil
     self:update_pos(x, y)
     self:push_command({ teleport = { x = x, y = y } })
@@ -144,17 +144,16 @@ end)
 
 ---创建云端逻辑单位
 ---@param key integer 物编单位 key（py.UnitKey）
----@param x number
----@param y number
+---@param point Point 出生点
 ---@param face? number 朝向
 ---@param owner? integer 归属玩家 role_id
 ---@return Unit
-function y3.unit.create(key, x, y, face, owner)
+function y3.unit.create(key, point, face, owner)
     seq = seq + 1
     local unit = New 'Unit' (seq, {
         key = key,
-        x = x,
-        y = y,
+        x = point:get_x(),
+        y = point:get_y(),
         face = face,
         owner = owner,
     })

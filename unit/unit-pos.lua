@@ -76,7 +76,7 @@ function M:accept_pos(x, y, now)
                 tostring(self.uid), speed, limit
             })
         end
-        self:teleport(self.current_pos.x, self.current_pos.y)
+        self:teleport(y3.point(self.current_pos.x, self.current_pos.y))
         return false
     end
 

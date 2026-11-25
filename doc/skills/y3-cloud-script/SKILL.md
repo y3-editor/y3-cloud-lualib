@@ -50,7 +50,7 @@ description: >
 | `y3.base64` | 封装内置 `MsBase64Encode` / `MsBase64Decode` |
 | `y3.attribute` | 属性系统：`create()` → `define` / `instance` / `set` / `add` / `get` / `modifier` / `event`，支持公式联动、上下限与 touched 记录 |
 | `y3.player` | 玩家命名空间：静态接口 `y3.player.get(role_id)` / `y3.player.all()`；实例方法在 `Player` 类上 |
-| `y3.unit` | 单位命名空间：`y3.unit.create(key, x, y, face, owner)` / `get` / `all`、`$Unit.Sync` 广播、`y3.unit.attr_define` 注册单位属性 |
+| `y3.unit` | 单位命名空间：`y3.unit.create(key, point, face, owner)` / `get` / `all`、`$Unit.Sync` 广播、`y3.unit.attr_define` 注册单位属性 |
 | `y3.event` | 事件与触发器：`trigger` / `event` / `eventManager` / `customEvent`（对应全局类 `Trigger` / `Event` / `EventManager` / `CustomEvent`）；`Player`、`Unit` 已继承 `CustomEvent`，可 `obj:event_on` / `obj:event_notify` / `obj:event_dispatch` |
 | `y3.gc` | 生命周期回收：`GCHost:bindGC(obj)` 把对象绑到宿主，宿主删除时一并删除；`y3.gc.host()` / `y3.gc.node(fn)` |
 | `y3.init` / `y3.on_init` | 初始化事件：模块加载期 `y3.on_init(fn)` 注册，入口末尾 `y3.init()` 按注册顺序执行 |
@@ -157,11 +157,11 @@ local mod = player:attr_modify('金币', 100)   -- Attribute.Modifier：mod:upda
 ## 8. 单位
 
 ```lua
-local unit = y3.unit.create(134224145, 100, 200, 0, role_id)   -- key, x, y, face, owner
-unit:move_to(300, 200)    -- 下发移动命令，客户端驱动 Y3 寻路
-unit:teleport(500, 500)   -- 云权威位移，不经过寻路
+local unit = y3.unit.create(134224145, y3.point(100, 200), 0, role_id)   -- key, point, face, owner
+unit:move_to(y3.point(300, 200))    -- 下发移动命令，客户端驱动 Y3 寻路
+unit:teleport(y3.point(500, 500))   -- 云权威位移，不经过寻路
 unit:stop()
-unit:get_pos()            -- 当前最优位置（寻路中按采样插值）
+unit:get_pos()            -- 当前最优位置（寻路中按采样插值，返回 x, y 两个数）
 ```
 
 单位的所有同步都走同一条 `$Unit.Sync`（100 ms 窗口合并）：
