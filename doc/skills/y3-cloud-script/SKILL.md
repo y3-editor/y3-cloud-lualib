@@ -53,7 +53,8 @@ description: >
 | `y3.unit` | 单位命名空间：`y3.unit.create(key, point, face, owner)` / `get` / `all`、`$Unit.Sync` 广播、`y3.unit.attr_define` 注册单位属性 |
 | `y3.event` | 事件与触发器：`trigger` / `event` / `eventManager` / `customEvent`（对应全局类 `Trigger` / `Event` / `EventManager` / `CustomEvent`）；`Player`、`Unit` 已继承 `CustomEvent`，可 `obj:event_on` / `obj:event_notify` / `obj:event_dispatch` |
 | `y3.gc` | 生命周期回收：`GCHost:bindGC(obj)` 把对象绑到宿主，宿主删除时一并删除；`y3.gc.host()` / `y3.gc.node(fn)` |
-| `y3.init` / `y3.on_init` | 初始化事件：模块加载期 `y3.on_init(fn)` 注册，入口末尾 `y3.init()` 按注册顺序执行 |
+| `y3.init` / `y3.on_init` | 初始化事件：模块加载期 `y3.on_init(fn)` 注册，入口末尾 `y3.init()` 按注册顺序执行（库级初始化用；业务启动改用下面的 `y3.game`） |
+| `y3.game` | 工程级游戏事件（`cloud_script/core/game.lua`）：`on(name, fn)` / `emit(name, ...)`；`_roomloaded` 时触发 `游戏-初始化` |
 | `y3.class` | 类工具；`init.lua` 同时注入全局 `Class` / `New` / `Extends` / `Delete` / `IsValid` / `Type` / `Alias` / `IsInstanceOf` |
 | `y3.util` | 通用工具（`sortPairs`、`dump`、`inspect` 等），init 里已启用 `<close>` 与 `'{}' % args` 格式化 |
 | `y3.develop.eval` | 云端执行 Lua（`$Develop.Eval`），仅 `debug` 时放行 |
@@ -198,7 +199,7 @@ unit:get_xy()             -- 同一位置的坐标，返回 x, y 两个数（性
 
 - `main.lua` 只做 require 编排，业务放 `game/`
 - 全局能力由 `y3/init.lua` 统一装配：新增库模块在那里挂 `y3.<name>`，模块自己挂全局，init 只 `require`
-- 启动逻辑用初始化事件：各模块在加载期 `y3.on_init(fn)` 注册，`main.lua` 最后调 `y3.init()` 统一触发（幂等；`y3.init()` 之后注册的回调立即执行）；不要在 require 期间直接建单位、发消息
+- 启动逻辑挂在工程级事件上：`main.lua` 在 `_roomloaded` 时 `y3.game.emit('游戏-初始化')`，业务模块用 `y3.game.on('游戏-初始化', fn)` 注册；不要在 require 期间直接建单位、发消息。`y3.on_init` 仍在库里，只用于与房间无关的库级初始化
 - 存档带 `schema_version`，解析失败不覆盖旧档
 - 回调一律兜底：事件 / 定时器 / RPC 处理器统一用 `xpcall(fn, Log.error, ...)`，单个回调抛错不许打哑后续事件；业务新写的事件回调、`y3.timer.*` 回调照此处理
 - base64 用 `y3.base64`；二进制跨端必须 base64（原样上行会丢非法 UTF-8、下行含 `\0` 会打断通道）
