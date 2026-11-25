@@ -67,7 +67,7 @@ end
 local function unpack_payload(raw)
     local text = y3.base64.decode(raw)
     if text == nil then
-        Log.warn('y3.client.rpc: base64 decode failed')
+        Log.warn('y3.client.rpc: base64 decode failed, len=' .. #raw .. ', head=' .. raw:sub(1, 80))
         return nil
     end
 
