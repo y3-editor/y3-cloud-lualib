@@ -465,6 +465,15 @@ Redis：key 长度与数量无限制；value 为字符串或可转字符串的�
 
 **观测技巧**：云脚本的 `Log.info` 会**转发到客户端日志**，客户端侧以 `[mlscript]: [.\file.lua:4]Demo.Notify role=1, n=1` 的形式出现——单端调试时客户端日志里能同时看到两端输出。但**转发不是全级别**：实测 `Log.warn` **不进客户端日志**，所以用 warn 打的探针在客户端日志里看不到。判定结论：**警告 / 错误一律以 `script_log` 为准**；反过来「客户端有 log、云端 `script_log` 零新增」才是云脚本服务没起来。
 
+**转发链路（云端 `Log` → 客户端终端）**：云端 `Log.info` 不直接调客户端代码，是引擎 runtime 把文本送回客户端进程的 python 宿主，宿主再用注入的 Lua 片段（客户端日志里显示为 `[string "<python>"]:5`）调 `log.info('[mlscript]: [.\文件:行]:' .. msg)`；之后全是纯客户端链路：
+
+`log.info` → `y3/tools/log.lua` 的 `Log:build` → `applyPrint` → `y3/util/log.lua:104` 的 `print(level, message, timestamp)` 回调 → 写 `maps/<地图>/script/.log/lua_player*.log`，并在 `y3.config.log.toHelper`（默认 `true`，见 `y3/game/config.lua`）为真时调 `y3.develop.helper.print`（`y3/util/log.lua:137`）→ `y3/develop/helper/helper.lua` 的 `M.print` → `M.notify('print', {...})`（`string.pack('>s4', json)`）→ TCP `127.0.0.1:<helper_port>` → Y3 开发助手终端。
+
+- 客户端日志里的 `[ info][[string "<python>"]:5]` 就是这条转发，`[mlscript]:` 之后才是云端给的 `[.\文件:行]` 与正文
+- 助手未连接时 `helper.notify` 静默返回（`helper.lua:74`），**文件日志照写**——终端没输出不等于云端没写日志
+- 助手侧再把消息截断到 10000 字节（`helper.lua:215`），与云端 2048 字节上限是两道独立限制
+- `y3.config.log.toHelper = false` 会掐掉整条助手通道，但客户端日志文件不受影响
+
 **探针通道**：可自建一个「执行任意 Lua 并返回结果」的调试 RPC（如 `dev/debug_eval.lua`），客户端用 GM 命令触发，输入与结果都经 `Log` 落日志。
 
 - 放行闸门 fail-closed：非正式环境才放行；正式环境回 `{ code = -12, message = "eval_disabled" }`

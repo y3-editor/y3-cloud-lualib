@@ -189,7 +189,7 @@ unit:get_pos()            -- 当前最优位置（寻路中按采样插值）
 
 - `y3.develop.eval`：客户端 `y3.cloud.run(code, cb)` → 云脚本执行，返回第一个返回值；需 `y3.config.debug`
 - 客户端控制台 `~` 前缀：先检查 `y3.cloud.ready`，再调用 `y3.cloud.run` 并回显结果或错误
-- 日志用大写 `Log.info/warn/error`；客户端侧看 `[mlscript]` 转发，判据以 `cloud_script/script_log` 为准
+- 日志用大写 `Log.info/warn/error`；`Log.info` 经引擎 runtime 注入客户端 `log.info`（日志里表现为 `[ info][[string "<python>"]:5]: [mlscript]: [.\文件:行]:...`），再走 `y3.develop.helper.print` 到开发助手终端；`warn` **不转发**，判据以 `cloud_script/script_log` 为准（链路细节见 cloud-script-native 调试章节）
 
 ## 10. 写业务的约束
 
