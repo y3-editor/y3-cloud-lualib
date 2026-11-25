@@ -14,6 +14,7 @@
 ---@field current_pos? { x: number, y: number, t: integer } 最新位置与时刻
 ---@field last_pos? { x: number, y: number, t: integer } 上一个位置与时刻
 ---@field _is_moving? boolean 是否在寻路
+---@field target_pos? { x: number, y: number } move_to 下发的目标点
 ---@field _pos_cache? { x: number, y: number }
 local M = Class 'Unit'
 Extends('Unit', 'CustomEvent')
@@ -77,19 +78,31 @@ function M:get_sync_data()
     }
 end
 
+---下达移动命令：客户端驱动 Y3 寻路，位置仍以客户端上报为准
+---@param x number
+---@param y number
+function M:move_to(x, y)
+    self.target_pos = { x = x, y = y }
+    self:mark_moving(true)
+    self:push_command({ move_to = { x = x, y = y } })
+end
+
 ---直接改位置，不经过寻路
 ---@param x number
 ---@param y number
 function M:teleport(x, y)
+    self.target_pos = nil
     self:update_pos(x, y)
     self:push_command({ teleport = { x = x, y = y } })
 end
 
----停步
+---停步：落点用当前最优位置
 function M:stop()
     local x, y = self:get_pos()
+    self.target_pos = nil
     self:mark_moving(false)
     self:update_pos(x, y)
+    self:push_command({ stop = true })
 end
 
 local function flush()

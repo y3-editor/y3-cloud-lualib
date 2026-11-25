@@ -65,6 +65,8 @@ end
 ---@param raw string
 ---@return table?
 local function unpack_payload(raw)
+    -- 引擎会把上行内容再 json.encode 一次，其中的 '/' 被转义成 '\/'，还原后才能解 base64
+    raw = raw:gsub('\\/', '/')
     local text = y3.base64.decode(raw)
     if text == nil then
         Log.warn('y3.client.rpc: base64 decode failed, len=' .. #raw .. ', head=' .. raw:sub(1, 80))
