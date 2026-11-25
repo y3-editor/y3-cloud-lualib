@@ -2,6 +2,9 @@
 -- 用法：require 'y3' 拿到全局 y3 表；模块放 y3/<目录>/<模块>.lua，按 require 'y3.<目录>.<模块>' 加载。
 -- util/ 放依赖引擎接口的工具，tools/ 放纯 Lua 工具。
 
+-- 本地调试器：调试器目录与端口由 Y3 开发助手写入 script_log/，缺文件时自身静默跳过
+require 'y3.debugger'
+
 ---@class Y3
 y3 = {}
 

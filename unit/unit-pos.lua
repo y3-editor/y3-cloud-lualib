@@ -4,19 +4,22 @@
 ---@class Unit
 local M = Class 'Unit'
 
--- 客户端上报速度上限：移动速度(单位/秒) × 容差
-local MOVE_SPEED_ATTR = '移动速度'
-local DEFAULT_MOVE_SPEED = 1000
-local MOVE_TOLERANCE = 1.5
+-- 客户端上报速度校验：上报速度超过速度上限即判为非法采样
+-- 上限由外部通过 y3.unit.set_speed_limit_provider 提供（容差自己乘进去），不设置时不做速度校验
+
+-- 计算速度时的采样余量（毫秒）：容忍上报与引擎帧的错位，避免边界落在帧上把正常移动判成超速
+local SPEED_WINDOW_MS = 100
 
 ---@type table<integer, true>
 local warned_speed = {}
 
----速度上限（单位/秒）
----@param unit Unit
----@return number
-local function speed_limit(unit)
-    return DEFAULT_MOVE_SPEED
+---@type fun(unit: Unit): number??
+local speed_limit_provider
+
+---开启移速监控：callback(unit) 返回该单位的速度上限（单位/秒，容差自行乘入），返回 nil 表示该单位不校验
+---@param callback fun(unit: Unit): number??
+function y3.unit.set_speed_limit_provider(callback)
+    speed_limit_provider = callback
 end
 
 ---记录当前位置与时间：唯一的位置写入点，同时作为速度校验的基准
@@ -40,7 +43,7 @@ function M:get_client_speed(x, y, now)
     if not last then
         return nil
     end
-    local dt = (now - last.t) / 1000
+    local dt = (now + SPEED_WINDOW_MS - last.t) / 1000
     if dt <= 0 then
         return nil
     end
@@ -54,13 +57,18 @@ end
 ---@param now integer
 ---@return boolean
 function M:accept_pos(x, y, now)
+    local limit = speed_limit_provider and speed_limit_provider(self)
+    if not limit then
+        self:update_pos(x, y, now)
+        return true
+    end
+
     local speed = self:get_client_speed(x, y, now)
     if speed == nil then
         self:update_pos(x, y, now)
         return true
     end
 
-    local limit = speed_limit(self) * MOVE_TOLERANCE
     if speed > limit then
         if not warned_speed[self.uid] then
             warned_speed[self.uid] = true
@@ -129,7 +137,7 @@ local function on_report(player, data)
     end
 end
 
-y3.client.rpc.register('Unit.Pos.Report', on_report)
+y3.client.rpc.register('$Unit.Pos.Report', on_report)
 
 ---当前最优位置：移动中在 last_pos → current_pos 之间插值，静止用 current_pos
 ---@param now? integer 毫秒时刻，缺省用 y3.timer.clock()
@@ -190,13 +198,13 @@ local function debug_flush()
     debug_need_full = false
 
     if next(units) then
-        y3.client.rpc.broadcast('Unit.Pos.Debug', { units = units })
+        y3.client.rpc.broadcast('$Unit.Pos.Debug', { units = units })
     end
 end
 
 y3.timer.loop(DEBUG_INTERVAL, debug_flush)
 
-y3.client.rpc.register('Unit.DebugPos', function (player, data)
+y3.client.rpc.register('$Unit.DebugPos', function (player, data)
     local enable = type(data) == 'table' and data.enable
     if enable then
         debug_viewers[player:get_id()] = true

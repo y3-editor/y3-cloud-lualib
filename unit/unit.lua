@@ -1,4 +1,4 @@
-﻿-- 云端逻辑单位：创建 / 移除 / 移动命令 / 属性变更，同一 tick 合成一条广播
+-- 云端逻辑单位：创建 / 移除 / 移动命令 / 属性变更，同一 tick 合成一条广播
 -- 方法 Unit.GetAll：客户端拉全量；通知 Unit.Sync：{ create, remove, attribute, command }
 
 ---@class Unit.Data
@@ -82,7 +82,7 @@ end
 ---@param y number
 function M:teleport(x, y)
     self:update_pos(x, y)
-    -- TODO 同步给客户端
+    self:push_command({ teleport = { x = x, y = y } })
 end
 
 ---停步
@@ -108,7 +108,7 @@ local function flush()
     for uid, unit in pairs(create_list) do
         payload[uid] = unit:get_sync_data()
     end
-    y3.client.rpc.broadcast('Unit.Sync', {
+    y3.client.rpc.broadcast('$Unit.Sync', {
         create = payload,
         remove = remove_list,
         attribute = attribute,
@@ -118,7 +118,7 @@ end
 
 y3.timer.loop(FLUSH_INTERVAL, flush)
 
-y3.client.rpc.register('Unit.GetAll', function ()
+y3.client.rpc.register('$Unit.GetAll', function ()
     local units = {}
     for uid, unit in pairs(cache) do
         units[uid] = unit:get_sync_data()

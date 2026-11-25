@@ -16,6 +16,6 @@ local function on_stats()
     }
 end
 
-y3.client.rpc.register('Develop.Stats', on_stats)
+y3.client.rpc.register('$Develop.Stats', on_stats)
 
 y3.develop.stats = on_stats

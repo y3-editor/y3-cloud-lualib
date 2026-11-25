@@ -10,16 +10,16 @@ local function info()
     }
 end
 
-y3.client.rpc.register('Y3Cloud.Hello', function ()
+y3.client.rpc.register('$Y3Cloud.Hello', function ()
     return info()
 end)
 
 ---@param role_id integer?
 local function push(role_id)
     if role_id then
-        y3.client.rpc.notify(role_id, 'Y3Cloud.Ready', info())
+        y3.client.rpc.notify(role_id, '$Y3Cloud.Ready', info())
     else
-        y3.client.rpc.broadcast('Y3Cloud.Ready', info())
+        y3.client.rpc.broadcast('$Y3Cloud.Ready', info())
     end
 end
 

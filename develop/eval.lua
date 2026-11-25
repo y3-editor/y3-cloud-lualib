@@ -79,6 +79,6 @@ local function on_eval(player, data)
     return packed[2]
 end
 
-y3.client.rpc.register('Develop.Eval', on_eval)
+y3.client.rpc.register('$Develop.Eval', on_eval)
 
 y3.develop.eval = on_eval

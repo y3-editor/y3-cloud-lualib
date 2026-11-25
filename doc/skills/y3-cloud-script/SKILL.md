@@ -5,8 +5,8 @@ description: >
   y3.redis / y3.base64 / y3.json / y3.seri / y3.config / y3.develop。业务代码按这份写。
 
   ALWAYS use this skill when user mentions: 云脚本、cloud_script、y3.client、y3.client.rpc、
-  y3.await、y3.timer、y3.redis、y3.config、y3.develop、Develop.Eval、y3.cloud、y3.cloud.run、
-  Y3Cloud.Hello、Y3Cloud.Ready、云脚本握手、云脚本执行 Lua、cloud_script/main.lua。
+  y3.await、y3.timer、y3.redis、y3.config、y3.develop、$Develop.Eval、y3.cloud、y3.cloud.run、
+  $Y3Cloud.Hello、$Y3Cloud.Ready、云脚本握手、云脚本执行 Lua、cloud_script/main.lua。
 ---
 
 # Y3 云脚本（y3 框架）
@@ -40,7 +40,7 @@ description: >
 |---|---|
 | `y3.config.debug` | 是否放行调试能力，默认按 `MsIsProdEnv()` 推断（正式环境 false） |
 | `y3.client.rpc` | 与客户端通讯：请求 / 应答 / 通知 / 广播 |
-| `y3.client.handshake` | 握手：应答 `Y3Cloud.Hello`，推送 `Y3Cloud.Ready` |
+| `y3.client.handshake` | 握手：应答 `$Y3Cloud.Hello`，推送 `$Y3Cloud.Ready` |
 | `y3.await` | 协程异步：`call` / `yield` / `sleep` / `waitAll`（sleep 的 waker 已接 `y3.timer`） |
 | `y3.timer` | 定时器：`wait` / `loop` / `loop_count` / `clock`，返回带 `:remove()` 的对象 |
 | `y3.redis` | 地图全局存档：`get` / `set` / `incr_by` 回调版 + `await.get/set/incr_by` 协程版 |
@@ -49,13 +49,13 @@ description: >
 | `y3.base64` | 封装内置 `MsBase64Encode` / `MsBase64Decode` |
 | `y3.attribute` | 属性系统：`create()` → `define` / `instance` / `set` / `add` / `get` / `modifier` / `event`，支持公式联动、上下限与 touched 记录 |
 | `y3.player` | 玩家命名空间：静态接口 `y3.player.get(role_id)` / `y3.player.all()`；实例方法在 `Player` 类上 |
-| `y3.unit` | 单位命名空间：`y3.unit.create(key, x, y, face, owner)` / `get` / `all`、`Unit.Sync` 广播、`y3.unit.attr_define` 注册单位属性 |
+| `y3.unit` | 单位命名空间：`y3.unit.create(key, x, y, face, owner)` / `get` / `all`、`$Unit.Sync` 广播、`y3.unit.attr_define` 注册单位属性 |
 | `y3.event` | 事件与触发器：`trigger` / `event` / `eventManager` / `customEvent`（对应全局类 `Trigger` / `Event` / `EventManager` / `CustomEvent`）；`Player`、`Unit` 已继承 `CustomEvent`，可 `obj:event_on` / `obj:event_notify` / `obj:event_dispatch` |
 | `y3.gc` | 生命周期回收：`GCHost:bindGC(obj)` 把对象绑到宿主，宿主删除时一并删除；`y3.gc.host()` / `y3.gc.node(fn)` |
 | `y3.init` / `y3.on_init` | 初始化事件：模块加载期 `y3.on_init(fn)` 注册，入口末尾 `y3.init()` 按注册顺序执行 |
 | `y3.class` | 类工具；`init.lua` 同时注入全局 `Class` / `New` / `Extends` / `Delete` / `IsValid` / `Type` / `Alias` / `IsInstanceOf` |
 | `y3.util` | 通用工具（`sortPairs`、`dump`、`inspect` 等），init 里已启用 `<close>` 与 `'{}' % args` 格式化 |
-| `y3.develop.eval` | 云端执行 Lua（`Develop.Eval`），仅 `debug` 时放行 |
+| `y3.develop.eval` | 云端执行 Lua（`$Develop.Eval`），仅 `debug` 时放行 |
 
 ## 3. 通讯：y3.client.rpc
 
@@ -80,7 +80,7 @@ y3.client.rpc.broadcast(method, data)              -- 一次发送，平台广�
 ## 4. 握手
 
 ```lua
--- 云脚本：房间加载完成与玩家加入时自动推 Y3Cloud.Ready
+-- 云脚本：房间加载完成与玩家加入时自动推 $Y3Cloud.Ready
 y3.client.handshake.info()     -- { version = y3.version, debug = y3.config.debug }
 
 -- 客户端
@@ -88,7 +88,7 @@ y3.cloud.ready                 -- 是否已握手
 y3.cloud.version               -- 云脚本 y3 库版本
 y3.cloud.debug                 -- 云脚本 debug 开关
 y3.cloud.on_ready(cb)          -- 已握手立即回调
-y3.cloud.request(cb)           -- 主动发 Y3Cloud.Hello
+y3.cloud.request(cb)           -- 主动发 $Y3Cloud.Hello
 ```
 
 ## 5. 异步与计时
@@ -140,14 +140,14 @@ local mod = player:attr_modify('金币', 100)   -- Attribute.Modifier：mod:upda
 
 `Player` 有 `get_id()`，可直接当 `y3.client.rpc.*` 的 player 参数。`try_consume_item` 返回成功只表示扣减已受理，新数量以 `_item_info_changed` / `_consume_item_notify` 为准；`player:is_exited()` 由 `_playerexit` / `_playerjoin` 维护，实例常驻不回收。
 
-属性变更由属性系统的 `getTouched()` 收集，`y3.timer.loop(0.1)` 每 100 ms 把窗口内所有变化过的玩家合成**一条** `Player.Sync`（`modifier` 的 update / remove 同样被收集），单位侧同理由 `Unit.Sync` 承担：
+属性变更由属性系统的 `getTouched()` 收集，`y3.timer.loop(0.1)` 每 100 ms 把窗口内所有变化过的玩家合成**一条** `$Player.Sync`（`modifier` 的 update / remove 同样被收集），单位侧同理由 `$Unit.Sync` 承担：
 
 | 方法 | 方向 | 报文 |
 |---|---|---|
-| `Player.GetAll` | 客户端 → 云 | 无 data，应答 `{ attribute = { [role_id] = { ['金币'] = 100 } } }` |
-| `Player.Sync` | 云 → 客户端（广播，`role_id = 0`） | `{ attribute = { [role_id] = { ['金币'] = 100 } } }`，只含 touched 且当前值与旧值不同的属性 |
+| `$Player.GetAll` | 客户端 → 云 | 无 data，应答 `{ attribute = { [role_id] = { ['金币'] = 100 } } }` |
+| `$Player.Sync` | 云 → 客户端（广播，`role_id = 0`） | `{ attribute = { [role_id] = { ['金币'] = 100 } } }`，只含 touched 且当前值与旧值不同的属性 |
 
-新增的玩家同步数据也挂进同一个 `Player.Sync` 报文（新增字段），不要再另开协议。
+新增的玩家同步数据也挂进同一个 `$Player.Sync` 报文（新增字段），不要再另开协议。
 
 客户端对应 `y3.cloud.player`：收到全量与增量后逐项调用 `Player:set(name, value)` 写进 Y3；`y3.cloud.player.set_player_hook(fn)` 注册钩子 `fn(player, name, value)`，钩子返回 true 时该属性不再写入 Y3。客户端不缓存属性。
 
@@ -163,7 +163,7 @@ unit:stop()
 unit:get_pos()            -- 当前最优位置（寻路中按采样插值）
 ```
 
-单位的所有同步都走同一条 `Unit.Sync`（100 ms 窗口合并）：
+单位的所有同步都走同一条 `$Unit.Sync`（100 ms 窗口合并）：
 
 | 字段 | 内容 |
 |---|---|
@@ -172,7 +172,7 @@ unit:get_pos()            -- 当前最优位置（寻路中按采样插值）
 | `attribute` | `{ [uid] = { [属性名] = 值 } }` |
 | `command` | `{ [uid] = { move_to = {x,y} } }` / `{ teleport = {...} }` / `{ stop = true }` |
 
-寻路段由客户端回传，协议 `Unit.Pos.Report`（reporter → 云，notify）：
+寻路段由客户端回传，协议 `$Unit.Pos.Report`（reporter → 云，notify）：
 
 ```lua
 { seq, start = { [uid] = true } }        -- 寻路开始（只作信号，起点由云端取上次结束的位置）
@@ -181,7 +181,8 @@ unit:get_pos()            -- 当前最优位置（寻路中按采样插值）
 ```
 
 - 云端只接受一个 reporter（存活玩家中最小 `role_id`），1 s 心跳、3 s 超时重选，`seq` 单调去重
-- `start` 只作信号：起点用云端当前（= 上次结束）位置，接受上报前先做速度合理性校验（距离 > `移动速度 × dt × 1.5` 的丢弃，`移动速度` 未注册时按 1000）
+- `start` 只作信号：起点用云端当前（= 上次结束）位置
+- 速度合理性校验是**可插拔**的：默认关闭；`y3.unit.set_speed_limit_provider(fn)` 注册后，`fn(unit)` 返回该单位的速度上限（单位/秒，容差由 `fn` 自己乘入；返回 nil 表示跳过该单位），上报速度超过上限即丢弃并退回上一位置（每单位只 warn 一次）。计算速度的采样窗口额外加 100 ms，避免边界落在帧上把正常移动误判成超速
 - 插值惰性求值：`get_pos(now?)` 用最近 3 个采样分段线性，超出最后采样时按最近速度沿目标方向外推；同一时刻结果缓存
 - 位置误差上界 ≈ `移动速度 × 采样间隔`（1000 速 / 200 ms ≈ 2 身位），依赖位置的判定要留容差；精确命中仍由客户端算
 

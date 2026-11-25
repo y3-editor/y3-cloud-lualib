@@ -119,12 +119,12 @@ local function flush()
     if not next(attribute) then
         return
     end
-    y3.client.rpc.broadcast('Player.Sync', { attribute = attribute })
+    y3.client.rpc.broadcast('$Player.Sync', { attribute = attribute })
 end
 
 y3.timer.loop(FLUSH_INTERVAL, flush)
 
-y3.client.rpc.register('Player.GetAll', function ()
+y3.client.rpc.register('$Player.GetAll', function ()
     return { attribute = API.attr_all() }
 end)
 
