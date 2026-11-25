@@ -68,7 +68,7 @@ end
 ---客户端表现所需的单位数据（位置取当前值）
 ---@return Unit.Data
 function M:get_sync_data()
-    local x, y = self:get_pos()
+    local x, y = self:get_xy()
     return {
         key = self.data.key,
         x = x,
@@ -98,7 +98,7 @@ end
 
 ---停步：落点用当前最优位置
 function M:stop()
-    local x, y = self:get_pos()
+    local x, y = self:get_xy()
     self.target_pos = nil
     self:mark_moving(false)
     self:update_pos(x, y)

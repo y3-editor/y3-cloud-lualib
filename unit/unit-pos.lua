@@ -110,7 +110,7 @@ local function on_report(player, data)
             local unit = y3.unit.get(uid)
             if unit then
                 unit:mark_moving(true)
-                unit:get_pos(now)
+                unit:get_xy(now)
             end
         end
     end
@@ -141,9 +141,17 @@ y3.client.rpc.register('$Unit.Pos.Report', on_report)
 
 ---当前最优位置：移动中在 last_pos → current_pos 之间插值，静止用 current_pos
 ---@param now? integer 毫秒时刻，缺省用 y3.timer.clock()
+---@return Point
+function M:get_pos(now)
+    local x, y = self:get_xy(now)
+    return y3.point(x, y)
+end
+
+---当前最优位置的坐标（性能敏感处用这个，免去建对象）
+---@param now? integer 毫秒时刻，缺省用 y3.timer.clock()
 ---@return number x
 ---@return number y
-function M:get_pos(now)
+function M:get_xy(now)
     now = now or y3.timer.clock()
 
     local cache = self._pos_cache
@@ -187,7 +195,7 @@ local function debug_flush()
 
     local units = {}
     for uid, unit in pairs(y3.unit.all()) do
-        local x, y = unit:get_pos()
+        local x, y = unit:get_xy()
         local face = unit.data.face or 0
         local last = debug_last[uid]
         if debug_need_full or not last or last.x ~= x or last.y ~= y or last.face ~= face then
