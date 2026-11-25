@@ -10,6 +10,10 @@ local M = Class 'Unit'
 -- 计算速度时的采样余量（毫秒）：容忍上报与引擎帧的错位，避免边界落在帧上把正常移动判成超速
 local SPEED_WINDOW_MS = 100
 
+-- 采样过期阈值（毫秒）：客户端重开（.rr / 重载游戏）后不会再上报，长于该值没有新采样即视为已停止，
+-- 否则云端会一直认为单位在寻路
+local STALE_MOVING_MS = 1000
+
 ---@type table<integer, true>
 local warned_speed = {}
 
@@ -87,6 +91,7 @@ end
 ---@param is_moving boolean
 function M:mark_moving(is_moving)
     self._is_moving = is_moving
+    self._pos_cache = nil
     if not is_moving then
         self.last_pos = self.current_pos
         warned_speed[self.uid] = nil
@@ -154,14 +159,19 @@ end
 function M:get_xy(now)
     now = now or y3.timer.clock()
 
-    local cache = self._pos_cache
-    if cache then
-        return cache.x, cache.y
-    end
-
     local cur = self.current_pos
     if not cur then
         return self.data.x, self.data.y
+    end
+
+    -- 长时间没有新采样：客户端可能已重开，寻路状态不可信，落定为停步
+    if self._is_moving and now - cur.t > STALE_MOVING_MS then
+        self:mark_moving(false)
+    end
+
+    local cache = self._pos_cache
+    if cache then
+        return cache.x, cache.y
     end
 
     local x, y = cur.x, cur.y
