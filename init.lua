@@ -33,6 +33,7 @@ y3.base64 = require 'y3.util.base64'
 y3.json   = require 'y3.util.json'
 y3.redis  = require 'y3.util.redis'
 y3.timer  = require 'y3.util.timer'
+y3.point  = require 'y3.util.point'
 
 y3.attribute = require 'y3.tools.attribute'
 
