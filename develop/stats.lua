@@ -1,7 +1,7 @@
 -- 云脚本状态查询：$Develop.Stats，供客户端仪表盘拉取
--- 帧耗时来源：MsGetScriptRunStat()
+-- 帧耗时来源：MsGetScriptRunStat()（官方 meta 的 ScriptRunStat）
 --   room_cur_last_tick_ms 每帧耗时：10 ms 采一次，用于最近 1 秒平均
---   room_cur_max_tick_ms  累计最大耗时：取相邻采样的增量，落在 10 秒窗口内的最大值即最近 10 秒最大耗时
+--   room_cur_max_tick_ms  单次 tick 最大耗时：取相邻采样的增量，落在 10 秒窗口内的最大值即最近 10 秒最大耗时
 -- 暂停/求值期间墙钟照走，会出现秒级离群值，超过阈值直接丢弃
 
 local config = require 'y3.config'
