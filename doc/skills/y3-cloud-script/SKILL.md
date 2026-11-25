@@ -43,7 +43,7 @@ description: >
 | `y3.client.handshake` | 握手：应答 `$Y3Cloud.Hello`，推送 `$Y3Cloud.Ready` |
 | `y3.await` | 协程异步：`call` / `yield` / `sleep` / `waitAll`（sleep 的 waker 已接 `y3.timer`） |
 | `y3.timer` | 定时器：`wait` / `loop` / `loop_count` / `clock`，返回带 `:remove()` 的对象 |
-| `y3.point` | 二维点值对象：`y3.point.new(x, y)`（`Class` 的 `__call` 是初始化类自身，不能用 `y3.point(x, y)`），接口 `get_x` / `get_y` / `move` / `get_distance_with` |
+| `y3.point` | 二维点值对象：`y3.point(x, y)`（也支持 `y3.point.new(x, y)`），接口 `get_x` / `get_y` / `move` / `get_distance_with` |
 | `y3.redis` | 地图全局存档：`get` / `set` / `incr_by` 回调版 + `await.get/set/incr_by` 协程版 |
 | `y3.json` | 封装 cjson：`encode` / `decode` |
 | `y3.seri` | 二进制序列化：`encode` / `decode` |
