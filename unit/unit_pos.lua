@@ -231,7 +231,7 @@ local function debug_flush()
     end
 end
 
-y3.timer.loop(DEBUG_INTERVAL, debug_flush)
+y3.timer.mark_internal(y3.timer.loop(DEBUG_INTERVAL, debug_flush))
 
 y3.client.rpc.register('$Unit.DebugPos', function (player, data)
     local enable = type(data) == 'table' and data.enable
@@ -242,3 +242,11 @@ y3.client.rpc.register('$Unit.DebugPos', function (player, data)
         debug_viewers[player:get_id()] = nil
     end
 end)
+
+---清空位置会话状态（会话重置用）
+function y3.unit.clear_pos()
+    warned_speed = {}
+    debug_viewers = {}
+    debug_last = {}
+    debug_need_full = false
+end

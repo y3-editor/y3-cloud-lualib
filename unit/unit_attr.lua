@@ -57,7 +57,7 @@ function y3.unit.attr_drain()
     local units = {}
     for instance, changed in pairs(touched) do
         local unit = instance.customData
-        if unit and y3.unit.get(unit.uid) then
+        if unit and y3.unit.get(unit.uid) == unit then
             local values = {}
             for name, old in pairs(changed) do
                 local value = instance:get(name)

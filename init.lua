@@ -52,6 +52,7 @@ y3.event = {
 y3.await.setSleepWaker(function (time, callback)
     y3.timer.wait(time, callback)
 end)
+y3.await.setErrorHandler(Log.error)
 
 require 'y3.client'
 

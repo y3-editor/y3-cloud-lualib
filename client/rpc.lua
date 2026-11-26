@@ -124,22 +124,43 @@ local function settle(id, err, data)
 end
 
 ---@param role_id integer
+---@param id integer
+---@param result any
+---@param err string?
+local function respond(role_id, id, result, err)
+    local ok, send_err = send(role_id, { i = id, d = result, e = err })
+    if not ok and send_err == 'too_large' then
+        send(role_id, { i = id, e = 'payload_too_large' })
+    end
+end
+
+---handler 在协程内执行，可以用 y3.await 等待；有 id 表示请求，return 值作为应答
+---@param role_id integer
 ---@param method string
 ---@param data any
----@return any result
----@return string? err
-local function dispatch(role_id, method, data)
+---@param id? integer
+local function dispatch(role_id, method, data, id)
     local handler = handlers[method]
     if not handler then
         Log.warn('y3.client.rpc: no handler, method=' .. tostring(method))
-        return nil, 'no_handler'
+        if id ~= nil then
+            respond(role_id, id, nil, 'no_handler')
+        end
+        return
     end
 
-    local ok, result, err = xpcall(handler, Log.error, y3.player.get(role_id), data)
-    if not ok then
-        return nil, tostring(result)
-    end
-    return result, err
+    local player = y3.player.get(role_id)
+    y3.await.call(function ()
+        local ok, result, err = xpcall(handler, Log.error, player, data, id)
+        if id == nil then
+            return
+        end
+        if not ok then
+            respond(role_id, id, nil, tostring(result))
+            return
+        end
+        respond(role_id, id, result, err)
+    end)
 end
 
 ---@param role_id integer
@@ -149,11 +170,7 @@ local function on_payload(role_id, payload)
     local method = payload.m
     local body = payload.d
     if id ~= nil and method ~= nil then        -- 请求
-        local result, err = dispatch(role_id, method, body)
-        local ok, send_err = send(role_id, { i = id, d = result, e = err })
-        if not ok and send_err == 'too_large' then
-            send(role_id, { i = id, e = 'payload_too_large' })
-        end
+        dispatch(role_id, method, body, id)
     elseif id ~= nil then                      -- 应答
         settle(id, payload.e, body)
     elseif method ~= nil then                  -- 通知
@@ -181,11 +198,22 @@ RegisterEvent(EVENT, function (_, role_id, _, evalue)
     xpcall(on_message, Log.error, role_id, evalue)
 end)
 
----注册客户端请求 / 通知的处理函数；handler(player, data) 的返回值作为请求应答
+---注册客户端请求 / 通知的处理函数；handler 在协程内执行，返回值作为请求应答
 ---@param method string
----@param callback fun(player: Player, data: any): any, string?
+---@param callback fun(player: Player, data: any, id: integer?): any, string?
 function M.register(method, callback)
     handlers[method] = callback
+end
+
+---丢弃所有等待应答的请求（会话重置用）
+function M.clear_session()
+    local snapshot = {}
+    for id in pairs(pending) do
+        snapshot[#snapshot + 1] = id
+    end
+    for i = 1, #snapshot do
+        settle(snapshot[i], 'reset')
+    end
 end
 
 ---向客户端发起请求，callback(suc, data, err)

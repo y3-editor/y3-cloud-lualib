@@ -116,7 +116,7 @@ local function flush()
     y3.client.rpc.broadcast('$Player.Sync', { attribute = attribute })
 end
 
-y3.timer.loop(FLUSH_INTERVAL, flush)
+y3.timer.mark_internal(y3.timer.loop(FLUSH_INTERVAL, flush))
 
 y3.client.rpc.register('$Player.GetAll', function ()
     return { attribute = y3.player.attr_all() }
@@ -138,4 +138,9 @@ end
 ---@return table<integer, Player>
 function y3.player.all()
     return cache
+end
+
+---清空玩家对象（会话重置用，不下发 remove）
+function y3.player.clear()
+    cache = {}
 end

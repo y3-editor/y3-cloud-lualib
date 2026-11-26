@@ -6,7 +6,7 @@ description: >
 
   ALWAYS use this skill when user mentions: 云脚本、cloud_script、y3.client、y3.client.rpc、
   y3.await、y3.timer、y3.redis、y3.config、y3.develop、$Develop.Eval、y3.cloud、y3.cloud.run、
-  $Y3Cloud.Hello、$Y3Cloud.Ready、云脚本握手、云脚本执行 Lua、cloud_script/main.lua。
+  $Y3Cloud.Hello、$Y3Cloud.Reset、云脚本握手、云脚本执行 Lua、cloud_script/main.lua。
 ---
 
 # Y3 云脚本（y3 框架）
@@ -40,7 +40,7 @@ description: >
 |---|---|
 | `y3.config.debug` | 是否放行调试能力，默认按 `MsIsProdEnv()` 推断（正式环境 false） |
 | `y3.client.rpc` | 与客户端通讯：请求 / 应答 / 通知 / 广播 |
-| `y3.client.handshake` | 握手：应答 `$Y3Cloud.Hello`，推送 `$Y3Cloud.Ready` |
+| `y3.client.handshake` | 握手：应答 `$Y3Cloud.Hello`（未就绪时挂起），就绪回调 |
 | `y3.await` | 协程异步：`call` / `yield` / `sleep` / `waitAll`（sleep 的 waker 已接 `y3.timer`） |
 | `y3.timer` | 定时器：`wait` / `loop` / `loop_count` / `clock`，返回带 `:remove()` 的对象 |
 | `y3.point` | 二维点值对象：`y3.point(x, y)`（也支持 `y3.point.new(x, y)`），接口 `get_x` / `get_y` / `move` / `get_distance_with` |
@@ -81,17 +81,25 @@ y3.client.rpc.broadcast(method, data)              -- 一次发送，平台广�
 
 ## 4. 握手
 
+客户端主动发起 `$Y3Cloud.Hello`，云端就绪后应答；未就绪（房间没加载完、会话重置中）的询问先挂起，就绪时补发。云端不再主动推 `Ready`。
+
 ```lua
--- 云脚本：房间加载完成与玩家加入时自动推 $Y3Cloud.Ready
-y3.client.handshake.info()     -- { version = y3.version, debug = y3.config.debug }
+-- 云脚本
+y3.client.handshake.info()            -- { version = y3.version, debug = y3.config.debug }
+y3.client.handshake.on_ready(fn)      -- 每个会话握手成功触发一次（main.lua 用来发「游戏-初始化」）
+y3.client.handshake.set_ready(bool)   -- 就绪状态；补发挂起的应答
+y3.client.handshake.new_session()     -- 开始新会话（重置），下一次握手会重新触发 on_ready
 
 -- 客户端
 y3.cloud.ready                 -- 是否已握手
 y3.cloud.version               -- 云脚本 y3 库版本
 y3.cloud.debug                 -- 云脚本 debug 开关
-y3.cloud.on_ready(cb)          -- 已握手立即回调
-y3.cloud.request(cb)           -- 主动发 $Y3Cloud.Hello
+y3.cloud.on_ready(cb)          -- 每次握手都会回调（重连后要重新拉全量，别写成一次性）
+y3.cloud.request(cb)           -- 主动发 $Y3Cloud.Hello，超时默认重试 2 次
+y3.cloud.reset()               -- 通知云端重置会话（`.rr` 用），随后需重新握手
 ```
+
+RPC handler 在 `y3.await` 协程里执行，需要等待时直接 `y3.await.sleep()` / `y3.await.yield()`，返回值即应答（`$Y3Cloud.Hello` 就是这样挂在未就绪状态上等就绪的）。
 
 ## 5. 异步与计时
 

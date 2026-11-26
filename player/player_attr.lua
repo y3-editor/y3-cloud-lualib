@@ -55,9 +55,10 @@ function y3.player.attr_drain()
     end
 
     local players = {}
+    local cache = y3.player.all()
     for instance, changed in pairs(touched) do
         local player = instance.customData
-        if player then
+        if player and cache[player.role_id] == player then
             local values = {}
             for name, old in pairs(changed) do
                 local value = instance:get(name)

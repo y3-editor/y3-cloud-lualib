@@ -118,7 +118,7 @@ function M:stop()
     self:push_command({ stop = true })
 end
 
-y3.timer.loop(FLUSH_INTERVAL, flush)
+y3.timer.mark_internal(y3.timer.loop(FLUSH_INTERVAL, flush))
 
 y3.client.rpc.register('$Unit.GetAll', function ()
     local units = {}
@@ -161,4 +161,14 @@ end
 ---@return table<integer, Unit>
 function y3.unit.all()
     return cache
+end
+
+---清空所有单位（会话重置用，不下发 remove）
+function y3.unit.clear()
+    for _, unit in pairs(cache) do
+        unit:mark_moving(false)
+    end
+    cache = {}
+    created = {}
+    removed = {}
 end

@@ -46,6 +46,8 @@ M.type = 'trigger'
 M._enable = true
 ---@private
 M._id = 0
+---@type boolean 库内部常驻，不随会话清理
+M.internal = false
 
 function M:__tostring()
     return ('{trigger|%d}'):format(self._id)
@@ -224,6 +226,20 @@ function M:unique(name)
     end
     M.uniques[name] = self
     return self
+end
+
+---清掉非库内部（internal）的触发器；会话重置用
+function M.clear_session()
+    local snapshot = {}
+    for _, trigger in pairs(M.all_triggers) do
+        snapshot[#snapshot + 1] = trigger
+    end
+    for i = 1, #snapshot do
+        local trigger = snapshot[i]
+        if not trigger.internal then
+            trigger:remove()
+        end
+    end
 end
 
 return M

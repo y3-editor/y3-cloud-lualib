@@ -23,6 +23,7 @@ function CloudTimer:__init(time, count, on_timer)
     self.removed = false
     self.last_ms = now_ms
     self.on_timer = on_timer
+    self.internal = false
 
     timers[#timers + 1] = self
 end
@@ -116,6 +117,28 @@ end
 ---@return CloudTimer
 function M.loop_count(time, count, on_timer)
     return New 'CloudTimer' (time, count, on_timer)
+end
+
+---标记为库内部常驻，不随会话清理
+---@param timer CloudTimer
+---@return CloudTimer
+function M.mark_internal(timer)
+    timer.internal = true
+    return timer
+end
+
+---清掉非库内部常驻的定时器；会话重置用
+function M.clear_session()
+    local snapshot = {}
+    for i = 1, #timers do
+        snapshot[i] = timers[i]
+    end
+    for i = 1, #snapshot do
+        local timer = snapshot[i]
+        if not timer.internal then
+            timer:remove()
+        end
+    end
 end
 
 return M
