@@ -20,10 +20,18 @@ local warned_speed = {}
 ---@type fun(unit: Unit): number??
 local speed_limit_provider
 
----开启移速监控：callback(unit) 返回该单位的速度上限（单位/秒，容差自行乘入），返回 nil 表示该单位不校验
----@param callback fun(unit: Unit): number??
-function y3.unit.set_speed_limit_provider(callback)
+---@type fun(unit: Unit, speed: number, limit: number)?
+local speed_violation
+
+---启用后云脚本会监控单位移动速度是否合法，但也意味着所有的传送功能也得由云脚本发起。
+---你需要在回调中传入一个合法的移动速度（考虑到网络延迟可以略大一些）。
+---当发生异常移速时会尝试将单位拉回（当然作弊者可以屏蔽掉拉回）。
+---第二个回调会在移速异常时调用，你可以用来做记录。
+---@param callback fun(unit: Unit): number?? 返回该单位的速度上限（单位/秒，容差自行乘入），返回 nil 表示该单位不校验
+---@param on_violation? fun(unit: Unit, speed: number, limit: number) 移速异常时的回调
+function y3.unit.set_speed_limit_provider(callback, on_violation)
     speed_limit_provider = callback
+    speed_violation = on_violation
 end
 
 ---记录当前位置与时间：唯一的位置写入点，同时作为速度校验的基准
@@ -79,6 +87,9 @@ function M:accept_pos(x, y, now)
             Log.warn('y3.unit.pos: report rejected, uid={} speed={%.1f} limit={%.1f}' % {
                 tostring(self.uid), speed, limit
             })
+        end
+        if speed_violation then
+            xpcall(speed_violation, Log.error, self, speed, limit)
         end
         self:teleport(y3.point(self.current_pos.x, self.current_pos.y))
         return false

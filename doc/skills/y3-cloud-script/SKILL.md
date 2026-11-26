@@ -151,7 +151,7 @@ local mod = player:attr_modify('金币', 100)   -- Attribute.Modifier：mod:upda
 
 新增的玩家同步数据也挂进同一个 `$Player.Sync` 报文（新增字段），不要再另开协议。
 
-客户端对应 `y3.cloud.player`：收到全量与增量后逐项调用 `Player:set(name, value)` 写进 Y3；`y3.cloud.player.set_player_hook(fn)` 注册钩子 `fn(player, name, value)`，钩子返回 true 时该属性不再写入 Y3。客户端不缓存属性。
+客户端对应 `y3.cloud.player`：收到全量与增量后逐项调用 `Player:set(name, value)` 写进 Y3；`y3.cloud.player.set_attr_hook(fn)` 注册钩子 `fn(player, name, value)`，钩子返回 true 时该属性不再写入 Y3（`y3.cloud.unit.set_attr_hook(fn)` 同理，签名是 `fn(unit, name, value)`）。客户端不缓存属性。
 
 `to_client` 为 true 的属性会 `recordTouch` 并进入全量与增量下发；为 false 的只留在云端。属性系统在首次 `system:instance()` 时才编译，所以 `attr_define` 必须在创建第一个玩家属性实例之前调用（放在 `cloud_script/config.lua`，由 `main.lua` 早于业务 require）。`exited` 只表示背后的用户退出，玩家属性照常计算与广播。
 
@@ -185,7 +185,7 @@ unit:get_xy()             -- 同一位置的坐标，返回 x, y 两个数（性
 
 - 云端只接受一个 reporter（存活玩家中最小 `role_id`），1 s 心跳、3 s 超时重选，`seq` 单调去重
 - `start` 只作信号：起点用云端当前（= 上次结束）位置
-- 速度合理性校验是**可插拔**的：默认关闭；`y3.unit.set_speed_limit_provider(fn)` 注册后，`fn(unit)` 返回该单位的速度上限（单位/秒，容差由 `fn` 自己乘入；返回 nil 表示跳过该单位），上报速度超过上限即丢弃并退回上一位置（每单位只 warn 一次）。计算速度的采样窗口额外加 100 ms，避免边界落在帧上把正常移动误判成超速
+- 速度合理性校验是**可插拔**的：默认关闭；`y3.unit.set_speed_limit_provider(fn, on_violation)` 注册后，`fn(unit)` 返回该单位的速度上限（单位/秒，容差由 `fn` 自己乘入；返回 nil 表示跳过该单位），上报速度超过上限即丢弃并退回上一位置（每单位只 warn 一次），同时以 `on_violation(unit, speed, limit)` 回调外部做记录（每次异常都调，回调里抛错只 `Log.error`）。计算速度的采样窗口额外加 100 ms，避免边界落在帧上把正常移动误判成超速。**启用即接管位移**：所有传送必须由云脚本发起（`unit:teleport`），否则客户端本地瞬移会被判超速拉回
 - 插值惰性求值：`get_pos(now?)` 返回 `Point`、`get_xy(now?)` 返回两个数，都用最近 3 个采样分段线性，超出最后采样时按最近速度沿目标方向外推；同一时刻结果缓存
 - 采样超过 1 s 没有更新即视为已停步（`STALE_MOVING_MS`）：客户端重开（`.rr` / 重载游戏）后会断上报，不这样处理云端会一直认为单位在寻路
 - 位置误差上界 ≈ `移动速度 × 采样间隔`（1000 速 / 200 ms ≈ 2 身位），依赖位置的判定要留容差；精确命中仍由客户端算

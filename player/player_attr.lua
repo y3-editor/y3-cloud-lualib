@@ -89,6 +89,9 @@ function y3.player.attr_all()
 end
 
 ---注册玩家属性；必须在第一次创建属性实例之前调用
+---定义后表示这个属性由云脚本进行权威计算，客户端只做显示功能。
+---设置 to_client 后这个属性也会同步给客户端，默认会写入 Y3 的属性系统。
+---如果这个属性引擎不关心（比如是某种货币），你也可以通过 `y3.cloud.player.set_attr_hook` 修改这个行为，这样省得在编辑器里新建这个属性。
 ---@param name string 属性名
 ---@param min? number|string 下限，可填另一个属性名做联动
 ---@param max? number|string 上限，可填另一个属性名做联动
