@@ -28,7 +28,19 @@ function System:init()
     self.require   = {}
     self.touched   = {}
     self.dirtySet  = {}
+    self:installTrap()
     return self
+end
+
+---在 methods 上挂编译陷阱，首次访问属性方法时触发编译
+---@package
+function System:installTrap()
+    setmetatable(self.methods, {
+        __index = function (methods, key)
+            self:compile()
+            return methods[key]
+        end
+    })
 end
 
 ---@param name string
@@ -37,9 +49,6 @@ end
 ---@param max? number | string
 ---@return Attribute.Define
 function System:define(name, simple, min, max)
-    if self.compiled then
-        error('Cannot define new attributes after compilation.')
-    end
     local define = API.createDefine(self, name)
     self.defines[name] = define
     if simple then
@@ -53,25 +62,59 @@ function System:define(name, simple, min, max)
     end
     define:setFormula(self.defaultFormula)
     define:setBaseSymbol(self.defaultBaseSymbol)
+    self:reset()
     return define
 end
 
 ---@param customData? any
 ---@return Attribute.Instance
 function System:instance(customData)
-    self:compile()
-    local instance = API.createInstance(self)
+    return API.createInstance(self, customData)
+end
 
-    return instance:init(self, customData)
+---@package
+function System:clearArtifacts()
+    local methods = self.methods
+    for key in pairs(methods) do
+        methods[key] = nil
+    end
+    for name in pairs(self.links) do
+        self.links[name] = nil
+    end
+    for name in pairs(self.require) do
+        self.require[name] = nil
+    end
+    for _, define in pairs(self.defines) do
+        define.compiled = nil
+    end
+end
+
+---丢弃已有编译结果，下次访问属性方法时按当前模板重新编译
+function System:reset()
+    if not self.compiled then
+        return
+    end
+    self.compiled = nil
+    self:clearArtifacts()
+    self:installTrap()
 end
 
 function System:compile()
     if self.compiled then
         return
     end
-    ---@type boolean?
+    setmetatable(self.methods, nil)
+    self:clearArtifacts()
+    local ok, err = pcall(self.buildCompiled, self)
+    if not ok then
+        self:installTrap()
+        error(err, 0)
+    end
     self.compiled = true
+end
 
+---@package
+function System:buildCompiled()
     ---@type table<string, table<string, true>>
     local linkMap = {}
     for name, define in pairs(self.defines) do
@@ -197,10 +240,8 @@ end
 ---@param simple boolean
 ---@return Attribute.Define
 function Define:setSimple(simple)
-    if self.compiled then
-        error('Cannot change simple status after compilation.')
-    end
     self.simple = simple
+    self.system:reset()
     return self
 end
 
@@ -208,11 +249,9 @@ end
 ---@param keepRate? boolean
 ---@return Attribute.Define
 function Define:setMin(min, keepRate)
-    if self.compiled then
-        error('Cannot change min value after compilation.')
-    end
     self.min = min
     self.minKeepRate = keepRate
+    self.system:reset()
     return self
 end
 
@@ -220,37 +259,32 @@ end
 ---@param keepRate? boolean
 ---@return Attribute.Define
 function Define:setMax(max, keepRate)
-    if self.compiled then
-        error('Cannot change max value after compilation.')
-    end
     self.max = max
     self.maxKeepRate = keepRate
+    self.system:reset()
     return self
 end
 
 ---@param formula string
 ---@return Attribute.Define
 function Define:setFormula(formula)
-    if self.compiled then
-        error('Cannot change formula after compilation.')
-    end
     self.formula = formula
+    self.system:reset()
     return self
 end
 
 ---@param baseSymbol string
 ---@return Attribute.Define
 function Define:setBaseSymbol(baseSymbol)
-    if self.compiled then
-        error('Cannot change base symbol after compilation.')
-    end
     self.baseSymbol = baseSymbol
+    self.system:reset()
     return self
 end
 
 ---@return Attribute.Define
 function Define:recordTouch()
     self.needRecordTouch = true
+    self.system:reset()
     return self
 end
 
@@ -676,7 +710,7 @@ return cache[{key}] or 0
         return string.format('(cache[%q] or 0)', key)
     end)
 
-    local params = {
+    local codeParams = {
         name = name,
         code = code,
         getMin = self:compileGetMinCode(),
@@ -704,16 +738,16 @@ value = {code:s}
 {checkMax:s}
 cache[{name}] = value
 return value
-]], params),
+]], codeParams),
         getMin = loadCode([[
 local methods = instance.methods
 return {getMin:s}
-]], params),
+]], codeParams),
         getMax = loadCode([[
 local cache = instance.cache
 local methods = instance.methods
 return {getMax:s}
-]], params),
+]], codeParams),
         checkAttention = self:compileCheckAttention(name),
     }
 end
@@ -723,13 +757,13 @@ function Define:compile()
     if self.compiled then
         return
     end
-    self.compiled = true
 
     if self.simple then
         self:compileSimple()
     else
         self:compileComplex()
     end
+    self.compiled = true
 end
 
 ---@package
@@ -828,6 +862,13 @@ function Instance:get(name)
         error('Unknown attribute: ' .. name)
     end
     return method.get(self)
+end
+
+---属性（含中间量）是否可用
+---@param name string
+---@return boolean
+function Instance:has(name)
+    return self.methods[name] ~= nil
 end
 
 ---@param name string
@@ -988,9 +1029,10 @@ end
 
 ---@package
 ---@param system Attribute.System
+---@param customData? any
 ---@return Attribute.Instance
-function API.createInstance(system)
-    return setmetatable({}, Instance):init(system)
+function API.createInstance(system, customData)
+    return setmetatable({}, Instance):init(system, customData)
 end
 
 return API

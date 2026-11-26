@@ -39,6 +39,10 @@ y3.attribute = require 'y3.tools.attribute'
 
 y3.gc = require 'y3.tools.gc'
 
+y3.reload = require 'y3.tools.reload'
+---@diagnostic disable-next-line: lowercase-global
+include = y3.reload.include
+
 y3.linked_table = require 'y3.tools.linked_table'
 
 -- 事件系统：Event / Trigger / EventManager / CustomEvent
