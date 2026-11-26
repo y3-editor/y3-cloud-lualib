@@ -17,19 +17,18 @@ description: >
 
 ```
 <项目根>/cloud_script/
-├── main.lua          # 只做 require 编排：local y3 = require 'y3'，再 require 业务模块
+├── main.lua          # 只做 include / require 编排
 ├── meta.lua          # 引擎 API 的类型声明，运行时不 require
-├── core/             # 项目级基础设施（rpc 旧实现、env、archive 等）
+├── core/             # 项目级基础设施（archive 等）
 ├── game/             # 业务模块（推荐放这里）
 ├── dev/              # 开发自测与探针
 └── y3/               # 云脚本基础库（submodule）
     ├── init.lua      # 装配全局 y3
-    ├── client/       # y3.client：rpc、handshake
+    ├── client/       # y3.client：rpc、handshake、reload
     ├── develop/      # y3.develop：eval
-    ├── player/       # y3.player：Player 对象、player_attr 属性与广播
-    ├── unit/         # y3.unit：逻辑单位、unit_attr 属性与广播、unit_pos 位置上报
+    ├── game/         # y3.game：game.lua（环境判据 + 事件总线）、player/、unit/、session.lua
     ├── tools/        # 纯 Lua（与客户端同名文件保持一致）：class、await、serialization、utility、attribute、gc、event、linked_table
-    └── util/         # 依赖引擎：json、redis、base64、timer、trigger
+    └── util/         # 依赖引擎：json、redis、base64、timer、trigger、point、reload
 ```
 
 `require` 根目录是 `cloud_script/`，`require 'y3'` 解析到 `y3/init.lua`。
@@ -54,7 +53,9 @@ description: >
 | `y3.event` | 事件与触发器：`trigger` / `event` / `eventManager` / `customEvent`（对应全局类 `Trigger` / `Event` / `EventManager` / `CustomEvent`）；`Player`、`Unit` 已继承 `CustomEvent`，可 `obj:event_on` / `obj:event_notify` / `obj:event_dispatch` |
 | `y3.gc` | 生命周期回收：`GCHost:bindGC(obj)` 把对象绑到宿主，宿主删除时一并删除；`y3.gc.host()` / `y3.gc.node(fn)` |
 | `y3.init` / `y3.on_init` | 初始化事件：模块加载期 `y3.on_init(fn)` 注册，入口末尾 `y3.init()` 按注册顺序执行（库级初始化用；业务启动改用下面的 `y3.game`） |
-| `y3.game` | 工程级游戏事件（`cloud_script/core/game.lua`）：`on(name, fn)` / `emit(name, ...)`；`_roomloaded` 时触发 `游戏-初始化` |
+| `y3.game` | 游戏逻辑命名空间（`y3/game/game.lua`）：环境判据 `is_prod()` / `is_debug()` / `allow_test()`；事件总线 `on(name, fn)` / `emit(name, ...)` / `clear_reloadable()`；握手完成派发 `游戏-初始化` |
+| `y3.session` | 会话重置：`reset()` 清单位 / 玩家 / 非常驻计时器 / 触发器 / 挂起请求；`$Y3Cloud.Reset` 处理，仅 `debug` |
+| `y3.reload` | 热重载（`y3/util/reload.lua`）：`include` 加载的模块可重载，`reload()` 重新执行；`.rd` 触发 |
 | `y3.class` | 类工具；`init.lua` 同时注入全局 `Class` / `New` / `Extends` / `Delete` / `IsValid` / `Type` / `Alias` / `IsInstanceOf` |
 | `y3.util` | 通用工具（`sortPairs`、`dump`、`inspect` 等），init 里已启用 `<close>` 与 `'{}' % args` 格式化 |
 | `y3.develop.eval` | 云端执行 Lua（`$Develop.Eval`），仅 `debug` 时放行 |
@@ -212,7 +213,7 @@ unit:get_xy()             -- 同一位置的坐标，返回 x, y 两个数（性
 - 存档带 `schema_version`，解析失败不覆盖旧档
 - 回调一律兜底：事件 / 定时器 / RPC 处理器统一用 `xpcall(fn, Log.error, ...)`，单个回调抛错不许打哑后续事件；业务新写的事件回调、`y3.timer.*` 回调照此处理
 - base64 用 `y3.base64`；二进制跨端必须 base64（原样上行会丢非法 UTF-8、下行含 `\0` 会打断通道）
-- 给命名空间补接口直接写 `function y3.unit.xxx()`（赋值到命名空间的字段，如 `y3/unit/unit_attr.lua`）；**不要**先 `local API = y3.unit` 再 `function API.xxx()`——对类引用赋值会触发 LuaLS `inject-field`，只能在赋值处再补一遍 `---@class Unit.API` 才不报。跨文件的命名空间类（`Unit.API`）只在 `y3/unit/init.lua` 声明一次
+- 给命名空间补接口直接写 `function y3.unit.xxx()`（赋值到命名空间的字段，如 `y3/game/unit/unit_attr.lua`）；**不要**先 `local API = y3.unit` 再 `function API.xxx()`——对类引用赋值会触发 LuaLS `inject-field`，只能在赋值处再补一遍 `---@class Unit.API` 才不报。跨文件的命名空间类（`Unit.API`）只在 `y3/game/unit/init.lua` 声明一次
 - 类型标注跟着实现走，**不写多余的 `---@field`**：实例字段由 `self.x = ...` 赋值自动推导（`Unit` 的 `current_pos` / `is_moving` / `target_pos` 都靠这个，别手写）；**类上的函数更不必写**——`function M:xxx()` / `function y3.player.xxx()` 定义一次，签名和返回类型就推导出来了，`---@field xxx fun(...)` 只是复述（`CloudTimer.on_timer`、`Player.API.attr_drain` 这类重复声明都已删）。签名用 `---@param` / `---@return`。只有推导不出来的才写：纯数据形状（`Unit.Data` 这种只由表字面量构造、无实现可推）；需要明确非空类型时用 `---@type integer` + `M.uid = 0` 在类文件里声明一次
 - 只 `include`/`require` 库与业务模块，不依赖本地文件与 C 模块
 

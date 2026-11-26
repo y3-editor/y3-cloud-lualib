@@ -10,8 +10,6 @@ y3 = {}
 
 y3.version = '0.1.0'
 
-y3.config = require 'y3.config'
-
 y3.class = require 'y3.tools.class'
 
 Class        = y3.class.declare
@@ -39,7 +37,7 @@ y3.attribute = require 'y3.tools.attribute'
 
 y3.gc = require 'y3.tools.gc'
 
-y3.reload = require 'y3.tools.reload'
+y3.reload = require 'y3.util.reload'
 ---@diagnostic disable-next-line: lowercase-global
 include = y3.reload.include
 
@@ -53,6 +51,11 @@ y3.event = {
     customEvent  = require 'y3.tools.custom_event',
 }
 
+-- 游戏级接口：环境判据 + 工程事件总线（继承 CustomEvent，需在事件系统之后加载）
+y3.game = require 'y3.game.game'
+
+y3.config = require 'y3.config'
+
 y3.await.setSleepWaker(function (time, callback)
     y3.timer.wait(time, callback)
 end)
@@ -60,9 +63,15 @@ y3.await.setErrorHandler(Log.error)
 
 require 'y3.client'
 
-require 'y3.player'
+-- 客户端握手完成 → 派发「游戏-初始化」；会话重置 / 热重载后等下一次握手同样会触发
+y3.client.handshake.on_ready(function ()
+    y3.game:event_notify('游戏-初始化')
+end)
 
-require 'y3.unit'
+-- 游戏逻辑：玩家 / 单位 / 会话
+require 'y3.game.player'
+require 'y3.game.unit'
+require 'y3.game.session'
 
 require 'y3.develop'
 

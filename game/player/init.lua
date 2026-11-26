@@ -4,5 +4,5 @@
 ---@class Player.API
 y3.player = {}
 
-require 'y3.player.player'
-require 'y3.player.player_attr'
+require 'y3.game.player.player'
+require 'y3.game.player.player_attr'

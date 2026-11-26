@@ -4,6 +4,6 @@
 ---@class Unit.API
 y3.unit = {}
 
-require 'y3.unit.unit'
-require 'y3.unit.unit_attr'
-require 'y3.unit.unit_pos'
+require 'y3.game.unit.unit'
+require 'y3.game.unit.unit_attr'
+require 'y3.game.unit.unit_pos'
