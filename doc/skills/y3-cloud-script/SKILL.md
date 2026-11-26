@@ -26,8 +26,8 @@ description: >
     ├── init.lua      # 装配全局 y3
     ├── client/       # y3.client：rpc、handshake
     ├── develop/      # y3.develop：eval
-    ├── player/       # y3.player：Player 对象、player-attr 属性与广播
-    ├── unit/         # y3.unit：逻辑单位、unit-attr 属性与广播
+    ├── player/       # y3.player：Player 对象、player_attr 属性与广播
+    ├── unit/         # y3.unit：逻辑单位、unit_attr 属性与广播、unit_pos 位置上报
     ├── tools/        # 纯 Lua（与客户端同名文件保持一致）：class、await、serialization、utility、attribute、gc、event、linked_table
     └── util/         # 依赖引擎：json、redis、base64、timer、trigger
 ```
@@ -204,7 +204,7 @@ unit:get_xy()             -- 同一位置的坐标，返回 x, y 两个数（性
 - 存档带 `schema_version`，解析失败不覆盖旧档
 - 回调一律兜底：事件 / 定时器 / RPC 处理器统一用 `xpcall(fn, Log.error, ...)`，单个回调抛错不许打哑后续事件；业务新写的事件回调、`y3.timer.*` 回调照此处理
 - base64 用 `y3.base64`；二进制跨端必须 base64（原样上行会丢非法 UTF-8、下行含 `\0` 会打断通道）
-- 给命名空间补接口直接写 `function y3.unit.xxx()`（赋值到命名空间的字段，如 `y3/unit/unit-attr.lua`）；**不要**先 `local API = y3.unit` 再 `function API.xxx()`——对类引用赋值会触发 LuaLS `inject-field`，只能在赋值处再补一遍 `---@class Unit.API` 才不报。跨文件的命名空间类（`Unit.API`）只在 `y3/unit/init.lua` 声明一次
+- 给命名空间补接口直接写 `function y3.unit.xxx()`（赋值到命名空间的字段，如 `y3/unit/unit_attr.lua`）；**不要**先 `local API = y3.unit` 再 `function API.xxx()`——对类引用赋值会触发 LuaLS `inject-field`，只能在赋值处再补一遍 `---@class Unit.API` 才不报。跨文件的命名空间类（`Unit.API`）只在 `y3/unit/init.lua` 声明一次
 - 类型标注跟着实现走，**不写多余的 `---@field`**：实例字段由 `self.x = ...` 赋值自动推导（`Unit` 的 `current_pos` / `is_moving` / `target_pos` 都靠这个，别手写）；**类上的函数更不必写**——`function M:xxx()` / `function y3.player.xxx()` 定义一次，签名和返回类型就推导出来了，`---@field xxx fun(...)` 只是复述（`CloudTimer.on_timer`、`Player.API.attr_drain` 这类重复声明都已删）。签名用 `---@param` / `---@return`。只有推导不出来的才写：纯数据形状（`Unit.Data` 这种只由表字面量构造、无实现可推）；需要明确非空类型时用 `---@type integer` + `M.uid = 0` 在类文件里声明一次
 - 只 `include`/`require` 库与业务模块，不依赖本地文件与 C 模块
 
