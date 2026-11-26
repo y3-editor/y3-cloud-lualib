@@ -166,14 +166,14 @@ unit:get_pos()            -- 当前最优位置，返回 Point（寻路中按采
 unit:get_xy()             -- 同一位置的坐标，返回 x, y 两个数（性能敏感处用这个）
 ```
 
-单位的所有同步都走同一条 `$Unit.Sync`（100 ms 窗口合并）：
+单位同步走同一条 `$Unit.Sync`：创建 / 移除 / 属性按 100 ms 窗口合并，命令当场单独下发：
 
 | 字段 | 内容 |
 |---|---|
 | `create` | `{ [uid] = { key, x, y, face, owner } }` |
 | `remove` | `{ [uid] = true }` |
 | `attribute` | `{ [uid] = { [属性名] = 值 } }` |
-| `command` | `{ [uid] = { move_to = {x,y} } }` / `{ teleport = {...} }` / `{ stop = true }` |
+| `command` | `{ [uid] = { move_to = {x,y} } }` / `{ teleport = {...} }` / `{ stop = true }`，每次一条，按调用顺序到达 |
 
 寻路段由客户端回传，协议 `$Unit.Pos.Report`（reporter → 云，notify）：
 
@@ -204,6 +204,8 @@ unit:get_xy()             -- 同一位置的坐标，返回 x, y 两个数（性
 - 存档带 `schema_version`，解析失败不覆盖旧档
 - 回调一律兜底：事件 / 定时器 / RPC 处理器统一用 `xpcall(fn, Log.error, ...)`，单个回调抛错不许打哑后续事件；业务新写的事件回调、`y3.timer.*` 回调照此处理
 - base64 用 `y3.base64`；二进制跨端必须 base64（原样上行会丢非法 UTF-8、下行含 `\0` 会打断通道）
+- 给命名空间补接口直接写 `function y3.unit.xxx()`（赋值到命名空间的字段，如 `y3/unit/unit-attr.lua`）；**不要**先 `local API = y3.unit` 再 `function API.xxx()`——对类引用赋值会触发 LuaLS `inject-field`，只能在赋值处再补一遍 `---@class Unit.API` 才不报。跨文件的命名空间类（`Unit.API`）只在 `y3/unit/init.lua` 声明一次
+- 类型标注跟着实现走，**不写多余的 `---@field`**：实例字段由 `self.x = ...` 赋值自动推导（`Unit` 的 `current_pos` / `is_moving` / `target_pos` 都靠这个，别手写）；**类上的函数更不必写**——`function M:xxx()` / `function y3.player.xxx()` 定义一次，签名和返回类型就推导出来了，`---@field xxx fun(...)` 只是复述（`CloudTimer.on_timer`、`Player.API.attr_drain` 这类重复声明都已删）。签名用 `---@param` / `---@return`。只有推导不出来的才写：纯数据形状（`Unit.Data` 这种只由表字面量构造、无实现可推）；需要明确非空类型时用 `---@type integer` + `M.uid = 0` 在类文件里声明一次
 - 只 `include`/`require` 库与业务模块，不依赖本地文件与 C 模块
 
 ## 11. 参考

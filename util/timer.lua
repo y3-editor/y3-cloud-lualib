@@ -6,12 +6,6 @@
 local TICK_MS = 10
 
 ---@class CloudTimer
----@field time_ms integer 间隔毫秒
----@field count integer 已触发次数
----@field max_count integer 触发上限，0 为无限
----@field removed boolean 是否已取消
----@field last_ms integer 上次触发时刻
----@field on_timer fun(timer: CloudTimer, count: integer)
 local CloudTimer = Class 'CloudTimer'
 
 ---@type CloudTimer[]

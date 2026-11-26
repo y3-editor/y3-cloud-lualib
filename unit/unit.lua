@@ -1,30 +1,20 @@
--- 云端逻辑单位：创建 / 移除 / 移动命令 / 属性变更，同一 tick 合成一条广播
+﻿-- 云端逻辑单位：创建 / 移除 / 属性变更按 100ms 合并广播，移动命令当场单独下发
 -- 方法 Unit.GetAll：客户端拉全量；通知 Unit.Sync：{ create, remove, attribute, command }
 
 ---@class Unit.Data
 ---@field key integer 物编单位 key（py.UnitKey）
----@field x number 出生点
+---@field x number
 ---@field y number
----@field face? number 朝向
+---@field face? number
 ---@field owner? integer 归属玩家 role_id
 
 ---@class Unit: CustomEvent, GCHost
----@field uid integer
----@field data Unit.Data
----@field current_pos? { x: number, y: number, t: integer } 最新位置与时刻
----@field last_pos? { x: number, y: number, t: integer } 上一个位置与时刻
----@field _is_moving? boolean 是否在寻路
----@field target_pos? { x: number, y: number } move_to 下发的目标点
----@field _pos_cache? { x: number, y: number }
 local M = Class 'Unit'
 Extends('Unit', 'CustomEvent')
 Extends('Unit', 'GCHost')
 
--- 属性相关的静态接口由 unit-attr.lua 实现
----@class Unit.API
----@field attr_drain fun(): table<integer, table<string, number>>
----@field attr_all fun(): table<integer, table<string, number>>
-local API = y3.unit
+---@type integer
+M.uid = 0
 
 -- 合并窗口（秒）
 local FLUSH_INTERVAL = 0.1
@@ -40,8 +30,26 @@ local created = {}
 ---@type table<integer, true>
 local removed = {}
 
----@type table<integer, table<string, any>>
-local commands = {}
+local function flush()
+    local create_list = created
+    local remove_list = removed
+    created = {}
+    removed = {}
+    local attribute = y3.unit.attr_drain()
+    if not next(create_list) and not next(remove_list) and not next(attribute) then
+        return
+    end
+
+    local payload = {}
+    for uid, unit in pairs(create_list) do
+        payload[uid] = unit:get_sync_data()
+    end
+    y3.client.rpc.broadcast('$Unit.Sync', {
+        create = payload,
+        remove = remove_list,
+        attribute = attribute,
+    })
+end
 
 ---@param uid integer
 ---@param data Unit.Data
@@ -56,13 +64,17 @@ function M:remove()
     self:mark_moving(false)
     cache[self.uid] = nil
     created[self.uid] = nil
-    commands[self.uid] = nil
     removed[self.uid] = true
 end
 
+---命令当场下发
 ---@param command table<string, any>
 function M:push_command(command)
-    commands[self.uid] = command
+    if created[self.uid] then
+        -- 单位还没同步给客户端，先补发创建，否则命令没有接收者
+        flush()
+    end
+    y3.client.rpc.broadcast('$Unit.Sync', { command = { [self.uid] = command } })
 end
 
 ---客户端表现所需的单位数据（位置取当前值）
@@ -92,6 +104,7 @@ end
 function M:teleport(point)
     local x, y = point:get_x(), point:get_y()
     self.target_pos = nil
+    self:mark_moving(false)
     self:update_pos(x, y)
     self:push_command({ teleport = { x = x, y = y } })
 end
@@ -105,30 +118,6 @@ function M:stop()
     self:push_command({ stop = true })
 end
 
-local function flush()
-    local create_list = created
-    local remove_list = removed
-    local command_list = commands
-    created = {}
-    removed = {}
-    commands = {}
-    local attribute = API.attr_drain()
-    if not next(create_list) and not next(remove_list) and not next(attribute) and not next(command_list) then
-        return
-    end
-
-    local payload = {}
-    for uid, unit in pairs(create_list) do
-        payload[uid] = unit:get_sync_data()
-    end
-    y3.client.rpc.broadcast('$Unit.Sync', {
-        create = payload,
-        remove = remove_list,
-        attribute = attribute,
-        command = command_list,
-    })
-end
-
 y3.timer.loop(FLUSH_INTERVAL, flush)
 
 y3.client.rpc.register('$Unit.GetAll', function ()
@@ -138,7 +127,7 @@ y3.client.rpc.register('$Unit.GetAll', function ()
     end
     return {
         units = units,
-        attribute = API.attr_all(),
+        attribute = y3.unit.attr_all(),
     }
 end)
 

@@ -5,12 +5,6 @@
 local M = Class 'Player'
 Extends('Player', 'CustomEvent')
 
--- 属性相关的静态接口由 player-attr.lua 实现
----@class Player.API
----@field attr_drain fun(): table<integer, table<string, number>>
----@field attr_all fun(): table<integer, table<string, number>>
-local API = y3.player
-
 -- 合并窗口（秒）
 local FLUSH_INTERVAL = 0.1
 
@@ -115,7 +109,7 @@ RegisterEvent('_playerjoin', function (_, role_id)
 end)
 
 local function flush()
-    local attribute = API.attr_drain()
+    local attribute = y3.player.attr_drain()
     if not next(attribute) then
         return
     end
@@ -125,7 +119,7 @@ end
 y3.timer.loop(FLUSH_INTERVAL, flush)
 
 y3.client.rpc.register('$Player.GetAll', function ()
-    return { attribute = API.attr_all() }
+    return { attribute = y3.player.attr_all() }
 end)
 
 ---取玩家对象，同一个 role_id 返回同一实例

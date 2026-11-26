@@ -3,9 +3,6 @@
 ---@class Unit
 local M = Class 'Unit'
 
----@class Unit.API
-local API = y3.unit
-
 local system = y3.attribute.create()
 
 ---@type table<string, true>
@@ -51,7 +48,7 @@ end
 
 ---取出本窗口内变化的属性，只留仍存在且与旧值不同的
 ---@return table<integer, table<string, number>>
-function API.attr_drain()
+function y3.unit.attr_drain()
     local touched = system:getTouched()
     if not touched then
         return {}
@@ -78,7 +75,7 @@ end
 
 ---所有单位的下发属性快照
 ---@return table<integer, table<string, number>>
-function API.attr_all()
+function y3.unit.attr_all()
     local units = {}
     for uid, unit in pairs(y3.unit.all()) do
         local values = {}
@@ -97,7 +94,7 @@ end
 ---@param max? number|string 上限，可填另一个属性名做联动
 ---@param to_client? boolean 是否随广播同步给客户端
 ---@return Attribute.Define
-function API.attr_define(name, min, max, to_client)
+function y3.unit.attr_define(name, min, max, to_client)
     local define = system:define(name, true, min, max)
     if to_client then
         CLIENT_ATTRS[name] = true
