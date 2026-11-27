@@ -81,11 +81,62 @@ local function unpack_payload(raw)
     return payload
 end
 
+--[[
+临时补丁：下行改为队列 + 主线程发送
+
+线上引擎在协程内调 MsSendMlEvent 会丢包（本地 exe 已修，线上未修）。dispatch 把
+handler 与 respond 都放在 y3.await.call（协程）里，于是握手后连续发出的几条应答
+会整批丢失——表现为 $Player.GetAll / $Unit.GetAll 请求超时，而每秒一条的 $Develop.Stats
+正常。实测同 tick 连发 4 条，客户端只收到第 1 条。
+
+做法：send 只入队，由主线程的 y3.timer.loop 统一发。编码失败与超长仍是同步失败。
+
+回归：线上引擎修复协程内下行后，把本段（send_queue 到 y3.timer.loop 的调用）删掉，
+把 send 末尾的入队改回直接调 MsSendMlEvent 并返回其 code，再用线上多开模式跑一次，
+确认握手后的 $Player.GetAll / $Unit.GetAll 正常应答、日志无 request failed。
+]]
+
+---@class Client.Rpc.Pending
+---@field role_id integer
+---@field body string
+---@field method string?
+---@field on_sent? fun(ok: boolean, err: string?)
+
+---@type Client.Rpc.Pending[]
+local send_queue = {}
+
+---@return nil
+local function flush_send_queue()
+    if #send_queue == 0 then
+        return
+    end
+
+    local queue = send_queue
+    send_queue = {}
+
+    for i = 1, #queue do
+        local item = queue[i]
+        local code = MsSendMlEvent(item.role_id, EVENT, item.body)
+        local ok = code == 0
+        if not ok then
+            Log.warn('y3.client.rpc: send failed, code=' .. tostring(code) .. ', method=' .. tostring(item.method))
+        end
+        if item.on_sent then
+            xpcall(item.on_sent, Log.error, ok, ok and nil or 'send_failed')
+        end
+    end
+end
+
+local FLUSH_INTERVAL = 0.02
+
+y3.timer.loop(FLUSH_INTERVAL, flush_send_queue)
+
 ---@param role_id integer
 ---@param payload table
+---@param on_sent? fun(ok: boolean, err: string?)
 ---@return boolean ok
 ---@return string? err
-local function send(role_id, payload)
+local function send(role_id, payload, on_sent)
     local text = pack_payload(payload)
     if text == nil then
         return false, 'encode_failed'
@@ -98,11 +149,12 @@ local function send(role_id, payload)
         return false, 'too_large'
     end
 
-    local code = MsSendMlEvent(role_id, EVENT, body)
-    if code ~= 0 then
-        Log.warn('y3.client.rpc: send failed, code=' .. tostring(code) .. ', method=' .. tostring(payload.m))
-        return false, 'send_failed'
-    end
+    send_queue[#send_queue + 1] = {
+        role_id = role_id,
+        body = body,
+        method = payload.m,
+        on_sent = on_sent,
+    }
     return true
 end
 
@@ -128,7 +180,11 @@ end
 ---@param result any
 ---@param err string?
 local function respond(role_id, id, result, err)
-    local ok, send_err = send(role_id, { i = id, d = result, e = err })
+    local ok, send_err = send(role_id, { i = id, d = result, e = err }, function (sent_ok, sent_err)
+        if not sent_ok and sent_err == 'send_failed' then
+            Log.warn('y3.client.rpc: respond failed, id=' .. tostring(id))
+        end
+    end)
     if not ok and send_err == 'too_large' then
         send(role_id, { i = id, e = 'payload_too_large' })
     end
