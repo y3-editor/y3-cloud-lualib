@@ -71,17 +71,6 @@ function M:try_consume_item(item_id, count)
     return true, 0
 end
 
----@return string?
-function M:get_archive()
-    return MsGetScriptArchive(self.role_id)
-end
-
----@param text string
----@return boolean
-function M:save_archive(text)
-    return MsSaveScriptArchive(self.role_id, text)
-end
-
 RegisterEvent('_roomloaded', function (_, _, _, player_guids)
     xpcall(function ()
         if type(player_guids) ~= 'table' then
@@ -93,9 +82,11 @@ RegisterEvent('_roomloaded', function (_, _, _, player_guids)
     end, Log.error)
 end)
 
-RegisterEvent('_playerexit', function (_, role_id)
+RegisterEvent('_playerexit', function (_, role_id, _, reason)
     xpcall(function ()
-        y3.player.get(role_id).exited = true
+        local player = y3.player.get(role_id)
+        player.exited = true
+        y3.game:event_notify('玩家-退出', player, reason)
     end, Log.error)
 end)
 
@@ -104,7 +95,9 @@ RegisterEvent('_playerjoin', function (_, role_id)
         return
     end
     xpcall(function ()
-        y3.player.get(role_id).exited = false
+        local player = y3.player.get(role_id)
+        player.exited = false
+        y3.game:event_notify('玩家-加入', player)
     end, Log.error)
 end)
 
@@ -116,7 +109,7 @@ local function flush()
     y3.client.rpc.broadcast('$Player.Sync', { attribute = attribute })
 end
 
-y3.timer.mark_internal(y3.timer.loop(FLUSH_INTERVAL, flush))
+y3.timer.loop(FLUSH_INTERVAL, flush)
 
 y3.client.rpc.register('$Player.GetAll', function ()
     return { attribute = y3.player.attr_all() }

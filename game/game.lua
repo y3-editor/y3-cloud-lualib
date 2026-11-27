@@ -65,4 +65,10 @@ function M.clear_reloadable()
     subscriptions = kept
 end
 
+RegisterEvent('_roomover', function (_, _, _, reason)
+    xpcall(function ()
+        M:event_notify('游戏-房间结束', reason)
+    end, Log.error)
+end)
+
 return M

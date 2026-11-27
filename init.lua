@@ -75,32 +75,4 @@ require 'y3.game.session'
 
 require 'y3.develop'
 
--- 初始化事件：业务在模块加载阶段注册，入口文件最后调 y3.init() 统一触发
-local init_callbacks = {}
-local inited = false
-
----注册初始化回调；`y3.init()` 之后注册的立即执行
----@param callback fun()
-function y3.on_init(callback)
-    if inited then
-        xpcall(callback, Log.error)
-        return
-    end
-    init_callbacks[#init_callbacks + 1] = callback
-end
-
----触发初始化，按注册顺序执行所有回调；重复调用无副作用
-function y3.init()
-    if inited then
-        return
-    end
-    inited = true
-
-    local list = init_callbacks
-    init_callbacks = {}
-    for i = 1, #list do
-        xpcall(list[i], Log.error)
-    end
-end
-
 return y3

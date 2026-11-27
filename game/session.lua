@@ -3,13 +3,12 @@
 ---@class Game.Session
 local M = {}
 
----清空本会话的运行时状态；库内部常驻资源与属性定义保留
+---清空本会话的运行时状态；库内部常驻资源、触发器、计时器与属性定义都保留
 function M.reset()
     y3.unit.clear()
     y3.unit.clear_pos()
+    y3.player.save_all()
     y3.player.clear()
-    y3.timer.clear_session()
-    y3.event.trigger.clear_session()
     y3.client.rpc.clear_session()
 end
 

@@ -54,11 +54,11 @@ description: >
 
 ```lua
 local json = require 'cjson'    -- 服务提供
-require 'core.rpc'              -- 自己的模块按目录写
-require 'game.xxx'
+require 'game.xxx'              -- 自己的模块按目录写
+include 'game.yyy'              -- 需要热重载的模块用 include
 ```
 
-- require 根目录是 `cloud_script/`，不写 `.lua` 后缀：`cloud_script/core/rpc.lua` → `require 'core.rpc'`
+- require 根目录是 `cloud_script/`，不写 `.lua` 后缀：`cloud_script/game/xxx.lua` → `require 'game.xxx'`
 - 路径区分大小写，必须与实际文件名一致
 - `main.lua` 保留为唯一入口；`meta.lua` 只用于补全/静态检查，**不要**在入口中加载
 
@@ -256,11 +256,15 @@ UnRegisterEvent(event_idx)
 | `MsGetScriptArchive(role_id)` | integer | 存档字符串；**首次无存档和玩家不存在都返回 nil** |
 | `MsSaveScriptArchive(role_id, data)` | integer, string | boolean |
 
-- 自行用 JSON 定义字段结构和版本；解析失败时不要把旧存档替换为空档
+- 自己定义字段结构和版本；解析失败时不要把旧存档替换为空档
+- 项目实现走 `y3` 库的 `Player:get_save()`（`y3/game/player/player_save.lua`）：内存里是 Lua 表，退出与房间结束时用 `y3.seri` 序列化写档，不再用 JSON
+- **存档通道会原样保留二进制字节（已实测）**：写入 0x00–0xFF 全 256 字节，`MsGetScriptArchive` 读回逐字节一致，重启游戏后（跨进程）同样一致。所以 seri 二进制**直接存，不用包 base64**（省 33% 体积）。⚠️ 这是**本地模拟服务**的实测结论；官方声明本地与线上行为可能不同，线上仍需在测试环境复核
+- `seri` 只保证新版本能解旧版本数据，**旧版本读不了新数据**：升级后不能回滚到会写档的旧代码
 - 上限 1,048,576 字节；超限返回 false 并写云脚本日志
+- **两个接口都是同步的**（无回调、无 Promise），能在任何同步上下文直接取返回值；需要异步的只有 Redis
 - **本地测试**：本地模拟服务**支持存档读写**，落盘在 `cloud_script/mls_archive/<role_id>.json`，结构为 `{"saved_at": <unix 秒>, "script_data_b64": "<业务字符串的 Base64>"}`。实测链路：本地 Mock **会触发 `_playerjoin`**（本地 `plat_aid` 是伪造值，形如 `{"plat_aid":"1"}`）→ 首次 `MsGetScriptArchive` 返回 `nil` 建新档 → `MsSaveScriptArchive` 返回 `true` → **重启游戏后读回（跨进程持久化成立）**。官方声明本地事件集合／返回值／限制／存档数据都可能与线上不同 ⇒ 本地跑通只代表流程可用，线上仍需在测试环境复核
 - **写档要有专用测试玩家**，并带 `schema_version` / 计数边界做兼容与迁移保护
-- **可直接观察的产物**：`mls_archive/<role_id>.json` 的 `script_data_b64` 解码即可核对业务字段
+- **可直接观察的产物**：`mls_archive/<role_id>.json` 的 `script_data_b64` 先 base64 解码，再按业务用的序列化方式解（`y3.seri.decode` / `json.decode`）
 
 **别与引擎侧 `y3.save_data` 混用（两套存档）**：
 
@@ -497,6 +501,21 @@ Redis：key 长度与数量无限制；value 为字符串或可转字符串的�
 | 日志缺行或结尾被截断 | 是否超每秒 100 条；单条是否超 2048 字节 |
 | 房间被结束 | 检查内存占用，以及单次回调和单 tick 的执行时长 |
 | 一次回调里循环大量「读档 + 写档」后**中途没了下文**（无报错、无结果） | 触到**单次回调的字节码 / 单 tick 预算**：实测批量结算约 1200 次即被掐断。**掐断不损坏存档**（每次写档是原子的），但批量操作要**分块**（≤1000 次/块） |
+| 想验证「退出时保存存档」，关进程后什么都没写 | `killGame` / 关窗口是强杀，**不触发 `_playerexit`**，mock 随之停止、没有落盘机会。改用 `.rr`（走 `$Y3Cloud.Reset` → `session.reset()` → 落盘）或正常退出房间 |
+| 想暂停 / 求值云脚本的运行时状态 | **做不到**：云脚本跑在 Python 侧，VS Code 的 `y3lua` 会话是客户端侧的，客户端求值也访问不到云脚本的 `y3.player` / `y3.cloud`。云脚本侧**只能靠 `script_log` 日志观测** |
+| 云脚本里 `event_on` 回调报 `table index is nil` / 拿到 nil 的玩家 | 回调**第一个参数是 `Trigger`**，业务参数从第二个开始。`function (player)` 拿到的是 trigger → 必须写 `function (_, player)` |
+
+### 二进制存档实测结论（2026-11-27，本地模拟服务）
+
+`MsSaveScriptArchive` / `MsGetScriptArchive` **原样保留非 UTF-8 字节**，是字符串通道而非 UTF-8 文本通道：
+
+| 实测项 | 结果 |
+|---|---|
+| 写入 0x00–0xFF 全 256 字节后读回 | 逐字节一致 |
+| `mls_archive/<role>.json` 的 `script_data_b64` 解码 | 纯 seri 二进制（开头 `3C 58 …` = `STableB` + `Str8`），含非 ASCII |
+| 重启游戏（新进程）后读回 | 一致，其它字段也保留 |
+
+⇒ 二进制直存即可，**不需要 base64 包裹**（省 33%）。与「上行消息会静默丢弃非法 UTF-8 字节」不矛盾：那是两套不同的通道。线上仍需在测试环境复核一次。
 
 ### 本地产物位置（相对项目根目录）
 

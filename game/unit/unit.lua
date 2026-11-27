@@ -118,7 +118,7 @@ function M:stop()
     self:push_command({ stop = true })
 end
 
-y3.timer.mark_internal(y3.timer.loop(FLUSH_INTERVAL, flush))
+y3.timer.loop(FLUSH_INTERVAL, flush)
 
 y3.client.rpc.register('$Unit.GetAll', function ()
     local units = {}

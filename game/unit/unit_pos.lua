@@ -231,7 +231,7 @@ local function debug_flush()
     end
 end
 
-y3.timer.mark_internal(y3.timer.loop(DEBUG_INTERVAL, debug_flush))
+y3.timer.loop(DEBUG_INTERVAL, debug_flush)
 
 y3.client.rpc.register('$Unit.DebugPos', function (player, data)
     local enable = type(data) == 'table' and data.enable
