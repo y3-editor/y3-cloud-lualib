@@ -49,7 +49,7 @@ description: >
 | `y3.seri` | 二进制序列化：`encode` / `decode` |
 | `y3.base64` | 封装内置 `MsBase64Encode` / `MsBase64Decode` |
 | `y3.attribute` | 属性系统：`create()` → `define` / `instance` / `set` / `add` / `get` / `modifier` / `event`，支持公式联动、上下限与 touched 记录 |
-| `y3.player` | 玩家命名空间：静态接口 `y3.player.get(role_id)` / `y3.player.all()` / `y3.player.save_all()`；实例方法在 `Player` 类上（含 `get_save()`） |
+| `y3.player` | 玩家命名空间：静态接口 `y3.player.get(role_id)` / `y3.player.all()` / `y3.player.save_flush()` / `y3.player.save_all()`；实例方法在 `Player` 类上（含 `get_save()`） |
 | `y3.unit` | 单位命名空间：`y3.unit.create(key, point, face, owner)` / `get` / `all`、`$Unit.Sync` 广播、`y3.unit.attr_define` 注册单位属性 |
 | `y3.event` | 事件与触发器：`trigger` / `event` / `eventManager` / `customEvent`（对应全局类 `Trigger` / `Event` / `EventManager` / `CustomEvent`）；`Player`、`Unit` 已继承 `CustomEvent`，可 `obj:event_on` / `obj:event_notify` / `obj:event_dispatch` |
 | `y3.gc` | 生命周期回收：`GCHost:bindGC(obj)` 把对象绑到宿主，宿主删除时一并删除；`y3.gc.host()` / `y3.gc.node(fn)` |
@@ -210,6 +210,8 @@ save.bag[1001] = true
 ```
 
 - 表就常驻内存，改字段**不触发写档**；只有 `玩家-退出` / `游戏-房间结束` / 会话重置前才序列化
+- **本地模拟服务额外每 5 秒定期保存一次**（`!y3.game.is_prod()` 时启用）：关客户端时 mock 进程会随之退出（日志里是 `read error` → `stop cost: ~34ms` → `exiting`），来不及触发 `_playerexit`，不靠定期保存就测不出「关客户端后还在」。线上不需要，`_playerleave` 后 3 分钟会自动触发 `_playerexit`
+- 定期保存用 `y3.player.save_flush()`（写档但**保留**标记）；`y3.player.save_all()` 写完会清标记，只在会话重置 / 房间结束用
 - 序列化用 `y3.seri`（二进制），不用 JSON：体积小、无 `cjson` 稀疏数组限制，seri 保证新版本能解旧版本数据（反向不保证）
 - **二进制直存，不包 base64**：已实测 `MsSaveScriptArchive` / `MsGetScriptArchive` 会原样保留非 UTF-8 字节 —— 写入 0x00–0xFF 全 256 字节，读回逐字节一致（同进程与重启进程后都验证过），所以省掉 base64 的 33% 开销
 - 结构与版本号由业务自定，库不校验、不补默认值、不迁移；建议自己记 `save.schema_version`

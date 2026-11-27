@@ -81,11 +81,16 @@ function M:get_save()
     return saves[self.role_id]
 end
 
----写档所有未冻结的存档并清空标记
-function y3.player.save_all()
+---写档所有已读档且未冻结的存档，保留标记
+function y3.player.save_flush()
     for role_id in pairs(saves) do
         write(role_id)
     end
+end
+
+---写档所有未冻结的存档并清空标记
+function y3.player.save_all()
+    y3.player.save_flush()
     loaded = {}
     frozen = {}
     broken = {}
@@ -112,3 +117,11 @@ end)
 y3.game:event_on('游戏-房间结束', function ()
     y3.player.save_all()
 end)
+
+local LOCAL_SAVE_INTERVAL = 5
+
+if not y3.game.is_prod() then
+    y3.timer.loop(LOCAL_SAVE_INTERVAL, function ()
+        y3.player.save_flush()
+    end)
+end
