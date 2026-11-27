@@ -60,6 +60,7 @@ include 'game.yyy'              -- 需要热重载的模块用 include
 
 - require 根目录是 `cloud_script/`，不写 `.lua` 后缀：`cloud_script/game/xxx.lua` → `require 'game.xxx'`
 - 路径区分大小写，必须与实际文件名一致
+- **`.lua` 必须 UTF-8 无 BOM**：线上用 `load(src, name, 't')` 加载源码，BOM 会报 `unexpected symbol near '<\239>'`，表现为 `'<路径>' load failed`。本地 Mock 容忍 BOM，测不出来——新建或另存文件时务必选「UTF-8 无 BOM」
 - `main.lua` 保留为唯一入口；`meta.lua` 只用于补全/静态检查，**不要**在入口中加载
 
 **require 的搜索根（实测，本地 Mock 与线上同构）**：`package.path` 只有 `<cloud_script 落点>/lua/?.lua`、`<落点>/?.lua`、`../share/lua/5.4/?.lua`（另加 CWD 的 `./?.lua`），即 **`cloud_script/` 根内可 require，根外一律 `module not found`**（不会向上跳目录）。

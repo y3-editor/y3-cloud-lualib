@@ -1,4 +1,4 @@
-﻿-- 云端逻辑单位：创建 / 移除 / 属性变更按 100ms 合并广播，移动命令当场单独下发
+-- 云端逻辑单位：创建 / 移除 / 属性变更按 100ms 合并广播，移动命令当场单独下发
 -- 方法 Unit.GetAll：客户端拉全量；通知 Unit.Sync：{ create, remove, attribute, command }
 
 ---@class Unit.Data

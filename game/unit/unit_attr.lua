@@ -1,4 +1,4 @@
-﻿-- 单位属性：属性注册、属性实例、变更收集（由 unit.lua 的 flush 统一广播）
+-- 单位属性：属性注册、属性实例、变更收集（由 unit.lua 的 flush 统一广播）
 
 ---@class Unit
 local M = Class 'Unit'

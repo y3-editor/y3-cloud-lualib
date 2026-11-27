@@ -34,6 +34,8 @@ description: >
 
 `require` 根目录是 `cloud_script/`，`require 'y3'` 解析到 `y3/init.lua`。
 
+`.lua` 文件必须保存为 **UTF-8 无 BOM**：线上用 `load(src, name, 't')` 加载源码，BOM 会让它报 `unexpected symbol near '<\239>'`，表现为 `'<路径>' load failed`；本地 Mock 容忍 BOM，测不出来。
+
 ## 2. y3 库导览
 
 | 模块 | 用途 |
