@@ -4,8 +4,6 @@
 --   room_cur_max_tick_ms  单次 tick 最大耗时：取相邻采样的增量，落在 10 秒窗口内的最大值即最近 10 秒最大耗时
 -- 暂停/求值期间墙钟照走，会出现秒级离群值，超过阈值直接丢弃
 
-local config = require 'y3.config'
-
 local SAMPLE_INTERVAL = 0.01
 local AVG_WINDOW_MS = 1000
 local MAX_WINDOW_MS = 10000
@@ -78,13 +76,8 @@ local function tick_max()
     return max
 end
 
----@return table|nil
----@return string|nil
+---@return table
 local function on_stats()
-    if not config.debug then
-        return nil, 'stats_disabled'
-    end
-
     return {
         time = MsGetRoomGameTime(),
         mem_kb = collectgarbage('count'),
